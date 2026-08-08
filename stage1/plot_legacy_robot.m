@@ -1,0 +1,66 @@
+function plot_legacy_robot(robot, q, ax)
+%PLOT_LEGACY_ROBOT Draw a simple visible kinematic model of the 5DOF arm.
+%
+% This helper does not change the robot mathematics. It only draws thick
+% links between the actual joint-frame origins obtained from rigidBodyTree.
+%
+% Inputs:
+%   robot - MonoTeach Legacy rigidBodyTree
+%   q     - 1x5 joint configuration in radians
+%   ax    - target axes (optional)
+
+    if nargin < 3 || isempty(ax)
+        ax = gca;
+    end
+
+    bodyNames = robot.BodyNames;
+    points = zeros(numel(bodyNames) + 1, 3);
+
+    % Base origin.
+    points(1, :) = [0, 0, 0];
+
+    % Every following point is the actual origin of body1 ... body5.
+    for i = 1:numel(bodyNames)
+        T = getTransform(robot, q, bodyNames{i});
+        points(i + 1, :) = T(1:3, 4)';
+    end
+
+    hold(ax, 'on');
+
+    % Thick polyline = simplified physical links.
+    plot3( ...
+        ax, ...
+        points(:, 1), ...
+        points(:, 2), ...
+        points(:, 3), ...
+        '-', ...
+        'LineWidth', 6);
+
+    % Joint centers.
+    plot3( ...
+        ax, ...
+        points(1:end-1, 1), ...
+        points(1:end-1, 2), ...
+        points(1:end-1, 3), ...
+        'o', ...
+        'MarkerSize', 8, ...
+        'LineWidth', 2);
+
+    % End effector marker.
+    plot3( ...
+        ax, ...
+        points(end, 1), ...
+        points(end, 2), ...
+        points(end, 3), ...
+        's', ...
+        'MarkerSize', 10, ...
+        'LineWidth', 2);
+
+    xlabel(ax, 'X (m)');
+    ylabel(ax, 'Y (m)');
+    zlabel(ax, 'Z (m)');
+
+    axis(ax, 'equal');
+    grid(ax, 'on');
+    view(ax, 3);
+end
