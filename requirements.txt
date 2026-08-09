@@ -3,3 +3,5 @@ matplotlib
 scipy
 pyserial
 pytest
+opencv-python==5.0.0.93
+mediapipe==1.0.0

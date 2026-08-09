@@ -1,160 +1,131 @@
-MonoTeach
+# MonoTeach
 
-MonoTeach 是一个基于单目视觉的机械臂示教项目。项目从已有的 5DOF Legacy 机械臂出发，先建立可信的机器人运动学与 MATLAB 仿真基线，再逐步接入二维手指轨迹、三维视觉示教、轨迹重定向、安全检查和真实机械臂执行。
+## 项目简介
 
-当前已完成：
+MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建立并验证 5DOF Legacy 机械臂的 Python/MATLAB 基线；Stage 2 开始接入视觉输入。最终目标是二维/三维视觉示教、轨迹处理、机械臂仿真与实物执行。
 
-Stage 0：5DOF Legacy Python 数学基线；
+## 当前进度
 
-Stage 1：MATLAB 5DOF 数字机械臂基线、Python ↔ MATLAB FK 交叉验证、数值 IK 与运动演示。
+- Stage 0：完成 — Python 5DOF 机械臂数学基线。
+- Stage 1：完成 — MATLAB 数字机械臂、FK 交叉验证与数值 IK。
+- Stage 2.1：完成 — C920 手部关键点与食指实时检测。
+- 下一阶段：Stage 2.2 — 二维食指轨迹记录、滤波与回放。
 
-目录结构
+## 当前目录结构
 
+```text
 MonoTeach/
-├── stage0/                         # Stage 0 Python 基线
-│   ├── robot_model.py              # 5DOF 静态模型、DH、限位与默认姿态
-│   ├── kinematics.py               # Modified DH、FK 与 IK
-│   ├── trajectory.py               # 五次插值与轨迹规划
-│   └── verify_legacy.py            # Legacy 综合验证
-│
-├── stage1/                         # Stage 1 MATLAB 数字机械臂
-│   ├── build_legacy_robot.m        # 构建 5DOF rigidBodyTree
-│   ├── plot_legacy_robot.m         # 简化机械臂几何可视化
-│   ├── export_python_fk_reference.py # 导出 Stage 0 FK 参考数据
-│   ├── verify_fk_consistency.m     # Python ↔ MATLAB FK 一致性验证
-│   ├── verify_stage1.m             # Stage 1 综合验收入口
-│   ├── demo_ik_motion.m            # IK 与机械臂运动演示
-│   └── data/
-│       └── python_fk_reference.json # FK 交叉验证参考数据
-│
+├── stage0/                         # Python 5DOF 数学基线
+│   ├── robot_model.py
+│   ├── kinematics.py
+│   ├── trajectory.py
+│   └── verify_legacy.py
+├── stage1/                         # MATLAB 数字机械臂基线
+│   ├── build_legacy_robot.m
+│   ├── plot_legacy_robot.m
+│   ├── export_python_fk_reference.py
+│   ├── verify_fk_consistency.m
+│   ├── verify_stage1.m
+│   ├── demo_ik_motion.m
+│   └── data/python_fk_reference.json
+├── stage2/                         # 视觉输入层
+│   ├── camera_stream.py
+│   ├── hand_tracker.py
+│   ├── hand_observation.py
+│   ├── fingertip.py
+│   ├── demo_camera.py
+│   ├── demo_fingertip_live.py
+│   ├── verify_stage2_1.py
+│   └── models/README.md
 ├── tests/
-│   ├── test_stage0.py              # Stage 0 Python 自动化测试
-│   └── test_stage1.m               # Stage 1 MATLAB 自动化测试
-│
-├── legacy_reference/               # 旧项目参考文件，仅作保留
-├── CURRENT_STATE.md                # 当前真实工程状态
-├── requirements.txt                # Python 依赖
-└── pytest.ini                      # pytest 配置
+│   ├── test_stage0.py
+│   ├── test_stage1.m
+│   └── test_stage2_1.py
+├── legacy_reference/               # 历史参考文件
+├── CURRENT_STATE.md
+├── requirements.txt
+└── pytest.ini
+```
 
-stage0/output/、stage1/output/、Python 缓存和 MATLAB 临时文件均属于本地运行产物，不纳入版本控制。
+`stage2/models/hand_landmarker.task` 是本地模型二进制，不提交到 Git；恢复方式见 `stage2/models/README.md`。
 
-Stage 0 已完成内容
+## Stage 0 / Stage 1 / Stage 2.1
 
-5DOF 机械臂的 Modified DH 参数、关节范围和默认姿态模型；
+- Stage 0：定义 5DOF Legacy 机械臂参数，实现 Modified DH、FK、IK、五次插值与轨迹规划。
+- Stage 1：在 MATLAB Robotics System Toolbox 中建立同一机器人，完成 Python → MATLAB FK 交叉验证、数值 IK 和演示。
+- Stage 2.1：接入 C920 与 MediaPipe HandLandmarker，输出单手 21 个 normalized landmarks、handedness 和食指指尖像素坐标。
 
-正运动学（FK）、逆运动学（IK）与目标位姿构造；
+Stage 2.1 数据流：
 
-五次多项式插值、笛卡尔轨迹与关节轨迹转换；
+```text
+C920
+  → CameraStream
+  → BGR frame + timestamp_ms
+  → HandTracker / MediaPipe HandLandmarker
+  → HandObservation
+  → index fingertip normalized / pixel coordinate
+  → live demo
+```
 
-Legacy 综合验证；
+## 运行方式
 
-pytest 自动化回归测试。
+在项目根目录创建并启用虚拟环境后安装依赖：
 
-Stage 0 的职责是提供经过验证的 Python 机器人数学基线，后续阶段不应随意修改其 DH、FK、IK 与轨迹定义。
-
-Stage 1 已完成内容
-
-使用 MATLAB Robotics System Toolbox 建立与 Stage 0 一致的 5DOF rigidBodyTree；
-
-保持相同的 Modified DH、关节顺序、关节限位和 Home Configuration；
-
-使用简化连杆/关节几何显示机械臂，而不是只显示坐标系；
-
-从 Stage 0 Python FK 自动导出多组参考数据；
-
-对默认姿态、普通非零姿态和较大角度姿态进行 Python ↔ MATLAB FK 交叉验证；
-
-使用 MATLAB inverseKinematics 求取已知可达目标的数值 IK；
-
-通过 FK 回代验证 IK 结果；
-
-完成 Home → Target 的机械臂运动演示与末端轨迹显示；
-
-增加 MATLAB 自动化测试和 Stage 1 一键综合验收。
-
-test 与 verify 的区别
-
-tests/test_stage0.py、tests/test_stage1.m：自动化单元/回归测试，用于快速判断已有能力是否被后续修改破坏；
-
-stage0/verify_legacy.py、stage1/verify_stage1.m：面向阶段验收的综合验证入口，会把多个模块串起来并输出更直观的阶段结果。
-
-二者职责不同，因此同时保留。
-
-运行
-
-Python 环境
-
-建议使用独立虚拟环境：
-
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
-运行 Stage 0 自动化测试：
+Python 自动化回归：
 
+```powershell
 python -m pytest -q
+```
 
-运行 Legacy 综合验证：
+Stage 0 综合验证：
 
+```powershell
 python -m stage0.verify_legacy
+```
 
-生成 Stage 1 FK 参考数据
+Stage 1 Python FK 参考数据导出：
 
-在项目根目录运行：
-
+```powershell
 python -m stage1.export_python_fk_reference
+```
 
-生成：
+Stage 1 MATLAB 入口（将 Current Folder 切换到 `stage1/`）：
 
-stage1/data/python_fk_reference.json
-
-MATLAB Stage 1
-
-当前验证环境：MATLAB R2024a + Robotics System Toolbox。
-
-将 MATLAB Current Folder 切换到：
-
-<MonoTeach>/stage1
-
-运行 FK 一致性验证：
-
+```matlab
 verify_fk_consistency
-
-运行 Stage 1 综合验收：
-
 verify_stage1
-
-运行 MATLAB 自动化测试：
-
-results = runtests('../tests/test_stage1.m');
-table(results)
-
-运行 IK 运动演示：
-
 demo_ik_motion
+```
 
-当前工程边界
+Stage 2.1 软件验收和实时 Demo：
 
-当前尚未进入：
+```powershell
+python -m stage2.verify_stage2_1
+python -m stage2.demo_camera
+python -m stage2.demo_fingertip_live
+```
 
-C920 实时视频输入；
+真实摄像头 Demo 需要在普通本地 PowerShell 等具有摄像头权限的环境中运行。
 
-MediaPipe 手部关键点；
+## Test / Verify / Manual Demo
 
-二维手指轨迹示教；
+- `test`：自动化单元与回归测试，不依赖真实摄像头。
+- `verify`：阶段级软件综合验收，不打开真实摄像头。
+- `manual demo`：真实硬件人工验收，包括画面、手部检测、可视化和退出行为。
 
-ArUco / PnP 三维视觉示教；
+## 当前工程边界 / 后续方向
 
-Python ↔ MATLAB 实时通信；
+C920 与 MediaPipe 已接入。当前尚未实现：
 
-碰撞与安全规划；
-
-Simulink / Simscape Multibody；
-
-ROS 2；
-
-新 6DOF 机械臂；
-
-真实机械臂执行。
-
-下一阶段将从 Stage 2.1：C920 手部关键点与食指实时检测 开始。
+- 二维轨迹记录、滤波与回放。
+- 真实二维工作平面映射。
+- Python ↔ MATLAB 轨迹接口。
+- ArUco / PnP 三维示教。
+- 安全轨迹重定向。
+- 6DOF 对照、Simulink / Simscape 与实物机械臂闭环。
