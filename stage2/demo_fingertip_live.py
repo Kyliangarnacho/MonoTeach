@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from .camera_stream import CameraConfig, CameraStream
+from .display_geometry import display_pixel
 from .fingertip import normalized_to_pixel
 from .hand_observation import HandObservation
 from .hand_tracker import HandTracker
@@ -23,9 +24,15 @@ HAND_CONNECTIONS = (
 )
 
 
-def status_lines(observation: HandObservation, fps: float) -> tuple[str, ...]:
+def status_lines(
+    observation: HandObservation,
+    fps: float,
+    mirror_preview: bool | None = None,
+) -> tuple[str, ...]:
     """Build display text without depending on a camera or OpenCV window."""
     lines = (f"FPS: {fps:.1f}",)
+    if mirror_preview is not None:
+        lines += (f"Mirror: {'ON' if mirror_preview else 'OFF'}",)
     if not observation.detected:
         return lines + ("No hand",)
 
@@ -42,13 +49,22 @@ def status_lines(observation: HandObservation, fps: float) -> tuple[str, ...]:
     )
 
 
-def draw_observation(frame: np.ndarray, observation: HandObservation, fps: float) -> None:
+def draw_observation(
+    frame: np.ndarray,
+    observation: HandObservation,
+    fps: float,
+    mirror_preview: bool = False,
+) -> None:
     """Draw hand landmarks, their skeleton, fingertip emphasis, and status text."""
     frame_height, frame_width = frame.shape[:2]
 
     if observation.detected:
         landmark_pixels = tuple(
-            normalized_to_pixel(x_norm, y_norm, frame_width, frame_height)
+            display_pixel(
+                normalized_to_pixel(x_norm, y_norm, frame_width, frame_height),
+                frame_width,
+                mirror_preview,
+            )
             for x_norm, y_norm, _z_norm in observation.landmarks_norm
         )
         for start, end in HAND_CONNECTIONS:
@@ -58,10 +74,17 @@ def draw_observation(frame: np.ndarray, observation: HandObservation, fps: float
             cv2.circle(frame, pixel, 3, (255, 255, 255), cv2.FILLED)
 
         if observation.index_tip_px is not None:
-            cv2.circle(frame, observation.index_tip_px, 11, (0, 220, 255), 2)
-            cv2.circle(frame, observation.index_tip_px, 5, (0, 80, 255), cv2.FILLED)
+            display_tip = display_pixel(
+                observation.index_tip_px,
+                frame_width,
+                mirror_preview,
+            )
+            cv2.circle(frame, display_tip, 11, (0, 220, 255), 2)
+            cv2.circle(frame, display_tip, 5, (0, 80, 255), cv2.FILLED)
 
-    for line_number, line in enumerate(status_lines(observation, fps)):
+    for line_number, line in enumerate(
+        status_lines(observation, fps, mirror_preview)
+    ):
         color = (0, 0, 255) if line == "No hand" else (255, 255, 255)
         cv2.putText(
             frame,
@@ -78,6 +101,7 @@ def draw_observation(frame: np.ndarray, observation: HandObservation, fps: float
 def main() -> int:
     """Run the live camera-to-fingertip visualization until q is pressed."""
     stream = CameraStream(CameraConfig())
+    mirror_preview = True
     try:
         profile = stream.open()
         print(
@@ -86,7 +110,7 @@ def main() -> int:
             f"resolution={profile.width}x{profile.height}, "
             f"fps={profile.fps:.3f}"
         )
-        print("Press q in the preview window to exit.")
+        print("Press M to toggle mirror preview; press Q to exit.")
 
         with HandTracker() as tracker:
             previous_time = time.perf_counter()
@@ -97,11 +121,20 @@ def main() -> int:
                 now = time.perf_counter()
                 elapsed_seconds = max(now - previous_time, 1e-9)
                 previous_time = now
-                draw_observation(frame, observation, 1.0 / elapsed_seconds)
+                display_frame = cv2.flip(frame, 1) if mirror_preview else frame.copy()
+                draw_observation(
+                    display_frame,
+                    observation,
+                    1.0 / elapsed_seconds,
+                    mirror_preview,
+                )
 
-                cv2.imshow("MonoTeach Stage 2.1 Live Fingertip", frame)
-                if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                cv2.imshow("MonoTeach Stage 2.1 Live Fingertip", display_frame)
+                key = cv2.waitKey(1) & 0xFF
+                if key in (ord("q"), ord("Q")):
                     return 0
+                if key in (ord("m"), ord("M")):
+                    mirror_preview = not mirror_preview
     except (FileNotFoundError, RuntimeError, ValueError) as error:
         print(f"Live fingertip demo failed: {error}")
         return 1

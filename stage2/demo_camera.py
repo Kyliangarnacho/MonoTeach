@@ -9,6 +9,7 @@ from .camera_stream import CameraConfig, CameraStream
 
 def main() -> int:
     stream = CameraStream(CameraConfig())
+    mirror_preview = True
     try:
         profile = stream.open()
     except RuntimeError as error:
@@ -21,14 +22,28 @@ def main() -> int:
         f"resolution={profile.width}x{profile.height}, "
         f"fps={profile.fps:.3f}"
     )
-    print("Press q in the preview window to exit.")
+    print("Press M to toggle mirror preview; press Q to exit.")
 
     try:
         while True:
             frame, _timestamp = stream.read()
-            cv2.imshow("MonoTeach Stage 2.1 Camera", frame)
-            if (cv2.waitKey(1) & 0xFF) == ord("q"):
+            display_frame = cv2.flip(frame, 1) if mirror_preview else frame.copy()
+            cv2.putText(
+                display_frame,
+                f"Mirror: {'ON' if mirror_preview else 'OFF'}",
+                (12, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.imshow("MonoTeach Stage 2.1 Camera", display_frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), ord("Q")):
                 return 0
+            if key in (ord("m"), ord("M")):
+                mirror_preview = not mirror_preview
     except RuntimeError as error:
         print(f"Camera verification failed: {error}")
         return 1

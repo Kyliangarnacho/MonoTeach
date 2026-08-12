@@ -9,7 +9,7 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 0：完成 — Python 5DOF 机械臂数学基线。
 - Stage 1：完成 — MATLAB 数字机械臂、FK 交叉验证与数值 IK。
 - Stage 2.1：完成 — C920 手部关键点与食指实时检测。
-- 下一阶段：Stage 2.2 — 二维食指轨迹记录、滤波与回放。
+- Stage 2.2：软件基线完成 — 二维轨迹录制、质量门控、EMA、JSON 持久化与按时间回放。
 
 ## 当前目录结构
 
@@ -35,12 +35,24 @@ MonoTeach/
 │   ├── fingertip.py
 │   ├── demo_camera.py
 │   ├── demo_fingertip_live.py
+│   ├── trajectory.py
+│   ├── trajectory_recorder.py
+│   ├── trajectory_quality.py
+│   ├── trajectory_filter.py
+│   ├── trajectory_io.py
+│   ├── trajectory_playback.py
+│   ├── demo_trajectory_record.py
+│   ├── demo_trajectory_playback.py
+│   ├── display_geometry.py
 │   ├── verify_stage2_1.py
 │   └── models/README.md
 ├── tests/
 │   ├── test_stage0.py
 │   ├── test_stage1.m
-│   └── test_stage2_1.py
+│   ├── test_stage2_1.py
+│   └── test_stage2_2.py
+├── data/trajectories/             # 本地轨迹 JSON，运行时生成并被 Git 忽略
+├── AGENTS.md
 ├── legacy_reference/               # 历史参考文件
 ├── CURRENT_STATE.md
 ├── requirements.txt
@@ -49,11 +61,12 @@ MonoTeach/
 
 `stage2/models/hand_landmarker.task` 是本地模型二进制，不提交到 Git；恢复方式见 `stage2/models/README.md`。
 
-## Stage 0 / Stage 1 / Stage 2.1
+## Stage 0 / Stage 1 / Stage 2.1 / Stage 2.2
 
 - Stage 0：定义 5DOF Legacy 机械臂参数，实现 Modified DH、FK、IK、五次插值与轨迹规划。
 - Stage 1：在 MATLAB Robotics System Toolbox 中建立同一机器人，完成 Python → MATLAB FK 交叉验证、数值 IK 和演示。
 - Stage 2.1：接入 C920 与 MediaPipe HandLandmarker，输出单手 21 个 normalized landmarks、handedness 和食指指尖像素坐标。
+- Stage 2.2：以 immutable `raw_samples` 为唯一事实源，完成录制状态机、速度质量门控、EMA 派生轨迹、JSON 保存/加载和基于 `t_ms` 的回放。
 
 Stage 2.1 数据流：
 
@@ -113,6 +126,15 @@ python -m stage2.demo_fingertip_live
 
 真实摄像头 Demo 需要在普通本地 PowerShell 等具有摄像头权限的环境中运行。
 
+Stage 2.2 轨迹录制与回放：
+
+```powershell
+python -m stage2.demo_trajectory_record
+python -m stage2.demo_trajectory_playback "data\trajectories\<trajectory>.json"
+```
+
+录制 Demo 使用 `Space` 开始/停止、`S` 保存、`P` 显示回放命令；回放 Demo 使用 `Space` 暂停/继续、`R` 重播、`Q` 退出。可用 `--speed 0.5|1.0|2.0` 和 `--show-raw` 调整回放。
+
 ## Test / Verify / Manual Demo
 
 - `test`：自动化单元与回归测试，不依赖真实摄像头。
@@ -121,9 +143,8 @@ python -m stage2.demo_fingertip_live
 
 ## 当前工程边界 / 后续方向
 
-C920 与 MediaPipe 已接入。当前尚未实现：
+C920、MediaPipe 和二维图像轨迹处理基线已接入。当前尚未实现：
 
-- 二维轨迹记录、滤波与回放。
 - 真实二维工作平面映射。
 - Python ↔ MATLAB 轨迹接口。
 - ArUco / PnP 三维示教。
