@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+import argparse
+from typing import Sequence
+
 import cv2
 
 from .camera_stream import CameraConfig, CameraStream
 
 
-def main() -> int:
-    stream = CameraStream(CameraConfig())
+def _argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--camera-index",
+        type=int,
+        default=CameraConfig().index,
+        help="OpenCV camera index (default: CameraConfig default)",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = _argument_parser().parse_args(argv)
+    stream = CameraStream(CameraConfig(index=arguments.camera_index))
     mirror_preview = True
     try:
         profile = stream.open()

@@ -7,6 +7,7 @@ import pytest
 from stage2.hand_observation import HandObservation
 from stage2.demo_trajectory_record import (
     EMA_ALPHA_PRESETS,
+    _argument_parser as trajectory_record_argument_parser,
     derive_display_trajectories,
     valid_pixel_segments,
 )
@@ -35,6 +36,12 @@ def detected_observation(timestamp_ms: float = 1_250.0) -> HandObservation:
         index_tip_norm=(0.25, 0.75),
         index_tip_px=(320, 540),
     )
+
+
+def test_trajectory_record_demo_accepts_explicit_camera_index():
+    arguments = trajectory_record_argument_parser().parse_args(["--camera-index", "0"])
+
+    assert arguments.camera_index == 0
 
 
 def test_valid_observation_converts_to_valid_sample():

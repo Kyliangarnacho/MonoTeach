@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import time
+from typing import Sequence
 
 import cv2
 import numpy as np
@@ -22,6 +24,17 @@ HAND_CONNECTIONS = (
     (13, 17), (17, 18), (18, 19), (19, 20),
     (0, 17),
 )
+
+
+def _argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--camera-index",
+        type=int,
+        default=CameraConfig().index,
+        help="OpenCV camera index (default: CameraConfig default)",
+    )
+    return parser
 
 
 def status_lines(
@@ -98,9 +111,10 @@ def draw_observation(
         )
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run the live camera-to-fingertip visualization until q is pressed."""
-    stream = CameraStream(CameraConfig())
+    arguments = _argument_parser().parse_args(argv)
+    stream = CameraStream(CameraConfig(index=arguments.camera_index))
     mirror_preview = True
     try:
         profile = stream.open()

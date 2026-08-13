@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Iterable
 from pathlib import Path
 import time
+from typing import Sequence
 
 import cv2
 import numpy as np
@@ -30,6 +32,17 @@ EMA_ALPHA_PRESETS = {
     ord("3"): 0.50,
     ord("4"): 1.00,
 }
+
+
+def _argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--camera-index",
+        type=int,
+        default=CameraConfig().index,
+        help="OpenCV camera index (default: CameraConfig default)",
+    )
+    return parser
 
 
 def derive_display_trajectories(
@@ -156,9 +169,10 @@ def draw_recording_status(
         )
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run live fingertip tracking with explicit trajectory recording controls."""
-    config = CameraConfig()
+    arguments = _argument_parser().parse_args(argv)
+    config = CameraConfig(index=arguments.camera_index)
     stream = CameraStream(config)
     recorder = TrajectoryRecorder()
     recording_metadata: TrajectoryMetadata | None = None

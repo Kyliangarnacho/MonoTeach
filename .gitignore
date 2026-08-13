@@ -42,6 +42,9 @@ __pycache__/
 /stage0/output/
 /stage1/output/
 /data/trajectories/
+/data/calibrations/
+/data/validations/
+/data/workspace_trajectories/
 
 # Downloaded MediaPipe task assets
 /stage2/models/hand_landmarker.task

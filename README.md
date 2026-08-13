@@ -10,6 +10,7 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 1：完成 — MATLAB 数字机械臂、FK 交叉验证与数值 IK。
 - Stage 2.1：完成 — C920 手部关键点与食指实时检测。
 - Stage 2.2：软件基线完成 — 二维轨迹录制、质量门控、EMA、JSON 持久化与按时间回放。
+- Stage 2.3：完成 — C920 标定资产加载、二维工作区标定/验证，以及毫米轨迹持久化与回放。
 
 ## 当前目录结构
 
@@ -43,6 +44,16 @@ MonoTeach/
 │   ├── trajectory_playback.py
 │   ├── demo_trajectory_record.py
 │   ├── demo_trajectory_playback.py
+│   ├── camera_calibration.py
+│   ├── workspace_geometry.py
+│   ├── workspace_calibration_io.py
+│   ├── calibrate_workspace_2d.py
+│   ├── workspace_validation.py
+│   ├── validate_workspace_2d.py
+│   ├── workspace_trajectory.py
+│   ├── workspace_trajectory_io.py
+│   ├── convert_trajectory_to_workspace.py
+│   ├── demo_workspace_trajectory_playback.py
 │   ├── display_geometry.py
 │   ├── verify_stage2_1.py
 │   └── models/README.md
@@ -50,8 +61,9 @@ MonoTeach/
 │   ├── test_stage0.py
 │   ├── test_stage1.m
 │   ├── test_stage2_1.py
-│   └── test_stage2_2.py
-├── data/trajectories/             # 本地轨迹 JSON，运行时生成并被 Git 忽略
+│   ├── test_stage2_2.py
+│   └── test_stage2_3.py
+├── data/                          # 本地 calibration / validation / trajectory JSON，运行时生成并被 Git 忽略
 ├── AGENTS.md
 ├── legacy_reference/               # 历史参考文件
 ├── CURRENT_STATE.md
@@ -61,12 +73,15 @@ MonoTeach/
 
 `stage2/models/hand_landmarker.task` 是本地模型二进制，不提交到 Git；恢复方式见 `stage2/models/README.md`。
 
-## Stage 0 / Stage 1 / Stage 2.1 / Stage 2.2
+## Stage 0 / Stage 1 / Stage 2
 
 - Stage 0：定义 5DOF Legacy 机械臂参数，实现 Modified DH、FK、IK、五次插值与轨迹规划。
 - Stage 1：在 MATLAB Robotics System Toolbox 中建立同一机器人，完成 Python → MATLAB FK 交叉验证、数值 IK 和演示。
 - Stage 2.1：接入 C920 与 MediaPipe HandLandmarker，输出单手 21 个 normalized landmarks、handedness 和食指指尖像素坐标。
 - Stage 2.2：以 immutable `raw_samples` 为唯一事实源，完成录制状态机、速度质量门控、EMA 派生轨迹、JSON 保存/加载和基于 `t_ms` 的回放。
+- Stage 2.3：加载 C920 K/D calibration asset，使用 `undistort_image_points()` 保持像素坐标语义；为 190 × 290 mm 工作区执行四点标定，保存 `WorkspaceCalibration` JSON（`H_image_to_workspace`）；以独立点进行毫米验证；将像素轨迹转换为 immutable `WorkspaceTrajectory2D`，并保存/加载、按毫米画布回放。
+
+当前 independent validation baseline：mean ≈ 1.534 mm、RMS ≈ 1.696 mm、max ≈ 2.502 mm。验证真值为人工粗略量取，仅作为当前 baseline，不作为高精度计量结论。
 
 Stage 2.1 数据流：
 
@@ -135,6 +150,18 @@ python -m stage2.demo_trajectory_playback "data\trajectories\<trajectory>.json"
 
 录制 Demo 使用 `Space` 开始/停止、`S` 保存、`P` 显示回放命令；回放 Demo 使用 `Space` 暂停/继续、`R` 重播、`Q` 退出。可用 `--speed 0.5|1.0|2.0` 和 `--show-raw` 调整回放。
 
+Stage 2.3 工作区标定、验证与毫米轨迹：
+
+```powershell
+python -m stage2.camera_calibration <camera_params.npz>
+python -m stage2.calibrate_workspace_2d --camera-calibration <camera_params.npz> --width-mm 190 --height-mm 290 --camera-index <actual-index>
+python -m stage2.validate_workspace_2d --camera-calibration <camera_params.npz> --workspace-calibration <workspace.json> --camera-index <actual-index>
+python -m stage2.convert_trajectory_to_workspace --trajectory <trajectory.json> --camera-calibration <camera_params.npz> --workspace-calibration <workspace.json>
+python -m stage2.demo_workspace_trajectory_playback <workspace_trajectory.json> --speed 1.0
+```
+
+OpenCV camera index 不是稳定硬件 ID；Windows 重新枚举后应先确认实际设备/index，再运行真实硬件入口。
+
 ## Test / Verify / Manual Demo
 
 - `test`：自动化单元与回归测试，不依赖真实摄像头。
@@ -143,9 +170,8 @@ python -m stage2.demo_trajectory_playback "data\trajectories\<trajectory>.json"
 
 ## 当前工程边界 / 后续方向
 
-C920、MediaPipe 和二维图像轨迹处理基线已接入。当前尚未实现：
+C920、二维工作区与毫米轨迹管线已接入。当前尚未实现：
 
-- 真实二维工作平面映射。
 - Python ↔ MATLAB 轨迹接口。
 - ArUco / PnP 三维示教。
 - 安全轨迹重定向。

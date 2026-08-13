@@ -3,30 +3,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Generic, Iterable, TypeVar
 
 from .trajectory import Trajectory2D, TrajectorySample
 from .trajectory_io import LoadedTrajectory
+from .workspace_trajectory import WorkspaceTrajectory2D, WorkspaceTrajectorySample
+
+
+PlaybackSample = TypeVar("PlaybackSample", TrajectorySample, WorkspaceTrajectorySample)
 
 
 @dataclass(frozen=True)
-class PlaybackEvent:
+class PlaybackEvent(Generic[PlaybackSample]):
     """One trajectory sample and its due time on the playback clock."""
 
     due_ms: float
-    sample: TrajectorySample
+    sample: PlaybackSample
 
 
 @dataclass(frozen=True)
-class PlaybackTimeline:
+class PlaybackTimeline(Generic[PlaybackSample]):
     """Immutable, time-scaled playback schedule."""
 
-    events: tuple[PlaybackEvent, ...]
+    events: tuple[PlaybackEvent[PlaybackSample], ...]
     playback_speed: float
     source_duration_ms: float
     playback_duration_ms: float
 
-    def samples_due(self, elapsed_playback_ms: float) -> tuple[TrajectorySample, ...]:
+    def samples_due(self, elapsed_playback_ms: float) -> tuple[PlaybackSample, ...]:
         """Return the ordered sample prefix due at the supplied playback time."""
         if elapsed_playback_ms < 0:
             raise ValueError("elapsed_playback_ms must be non-negative.")
@@ -36,19 +40,24 @@ class PlaybackTimeline:
 
 
 def build_playback_timeline(
-    source: LoadedTrajectory | Trajectory2D,
+    source: LoadedTrajectory | Trajectory2D | WorkspaceTrajectory2D,
     *,
-    samples: Iterable[TrajectorySample] | None = None,
+    samples: Iterable[PlaybackSample] | None = None,
     playback_speed: float = 1.0,
-) -> PlaybackTimeline:
+) -> PlaybackTimeline[PlaybackSample]:
     """Build a schedule from raw or derived samples without mutating either."""
     if playback_speed <= 0:
         raise ValueError("playback_speed must be positive.")
 
-    trajectory = source.trajectory if isinstance(source, LoadedTrajectory) else source
-    scheduled_samples = (
-        trajectory.raw_samples if samples is None else tuple(samples)
-    )
+    if isinstance(source, LoadedTrajectory):
+        default_samples: tuple[TrajectorySample, ...] = source.trajectory.raw_samples
+    elif isinstance(source, Trajectory2D):
+        default_samples = source.raw_samples
+    elif isinstance(source, WorkspaceTrajectory2D):
+        default_samples = source.samples
+    else:
+        raise TypeError("source must be a loaded, image, or workspace trajectory.")
+    scheduled_samples = default_samples if samples is None else tuple(samples)
     _validate_sample_timeline(scheduled_samples)
 
     events = tuple(
@@ -64,7 +73,7 @@ def build_playback_timeline(
     )
 
 
-def _validate_sample_timeline(samples: tuple[TrajectorySample, ...]) -> None:
+def _validate_sample_timeline(samples: tuple[PlaybackSample, ...]) -> None:
     previous_t_ms: float | None = None
     for sample in samples:
         if previous_t_ms is not None and sample.t_ms <= previous_t_ms:

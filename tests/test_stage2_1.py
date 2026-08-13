@@ -4,6 +4,8 @@ import pytest
 import numpy as np
 
 from stage2.camera_stream import CameraConfig, CameraStream
+from stage2.demo_camera import _argument_parser as camera_demo_argument_parser
+from stage2.demo_fingertip_live import _argument_parser as fingertip_demo_argument_parser
 from stage2.demo_fingertip_live import status_lines
 from stage2.fingertip import normalized_to_pixel
 from stage2.hand_observation import HandObservation
@@ -115,3 +117,8 @@ def test_live_demo_status_lines_for_detected_hand():
         "Index tip norm: x=0.125, y=0.875",
         "Index tip px: u=80, v=420",
     )
+
+
+def test_camera_facing_stage_2_1_demos_accept_explicit_camera_index():
+    assert camera_demo_argument_parser().parse_args(["--camera-index", "0"]).camera_index == 0
+    assert fingertip_demo_argument_parser().parse_args(["--camera-index", "0"]).camera_index == 0
