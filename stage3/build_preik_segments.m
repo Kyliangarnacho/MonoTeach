@@ -1,0 +1,206 @@
+function segmentSet = build_preik_segments(taskTrajectory)
+%BUILD_PREIK_SEGMENTS Extract contiguous pre-IK candidates from TaskTrajectory.
+%
+% Input:
+%   taskTrajectory - robot-base metre samples from workspace_to_task_trajectory
+%
+% Output:
+%   segmentSet     - new derived struct containing an eligibility mask and
+%                    contiguous candidate segments; taskTrajectory is unchanged.
+%
+% A sample is pre-IK eligible only when valid && inside_workspace. Invalid
+% gaps and valid-but-outside samples are both barriers, so no segment crosses
+% either one. These are candidate geometry runs only, not robot-executable
+% trajectories: IK, limits, collision, and timing remain unchecked.
+
+    validate_task_trajectory(taskTrajectory);
+
+    sourceSamples = taskTrajectory.samples;
+    sampleCount = numel(sourceSamples);
+    eligibleMask = false(1, sampleCount);
+
+    for i = 1:sampleCount
+        % Eligibility intentionally has no inferred recovery or clipping.
+        eligibleMask(i) = ...
+            sourceSamples(i).valid && sourceSamples(i).inside_workspace;
+    end
+
+    segments = repmat(empty_segment(), 1, 0);
+    i = 1;
+
+    while i <= sampleCount
+        if ~eligibleMask(i)
+            i = i + 1;
+            continue;
+        end
+
+        startIndex = i;
+
+        % Extend only over immediately adjacent eligible samples. A gap or
+        % outside point terminates the run instead of being auto-connected.
+        while i < sampleCount && eligibleMask(i + 1)
+            i = i + 1;
+        end
+
+        endIndex = i;
+        sourceIndices = startIndex:endIndex;
+        segmentSamples = sourceSamples(sourceIndices);
+
+        segment = struct( ...
+            'start_index', startIndex, ...
+            'end_index', endIndex, ...
+            'source_indices', sourceIndices, ...
+            'samples', segmentSamples, ...
+            'start_t_ms', segmentSamples(1).t_ms, ...
+            'end_t_ms', segmentSamples(end).t_ms);
+
+        segments(end + 1) = segment; %#ok<AGROW>
+        i = i + 1;
+    end
+
+    segmentSet = struct();
+    segmentSet.coordinate_frame = taskTrajectory.coordinate_frame;
+    segmentSet.units = taskTrajectory.metadata.units;
+    segmentSet.metadata = taskTrajectory.metadata;
+    segmentSet.eligible_mask = eligibleMask;
+    segmentSet.segments = segments;
+    segmentSet.summary = struct( ...
+        'total_sample_count', sampleCount, ...
+        'eligible_sample_count', sum(eligibleMask), ...
+        'barrier_sample_count', sum(~eligibleMask), ...
+        'segment_count', numel(segments), ...
+        'single_point_segment_count', ...
+        sum(arrayfun(@(segment) ...
+            numel(segment.source_indices) == 1, segments)));
+end
+
+
+function segment = empty_segment()
+
+    segment = struct( ...
+        'start_index', [], ...
+        'end_index', [], ...
+        'source_indices', [], ...
+        'samples', [], ...
+        'start_t_ms', [], ...
+        'end_t_ms', []);
+end
+
+
+function validate_task_trajectory(taskTrajectory)
+
+    if ~isstruct(taskTrajectory) || ~isscalar(taskTrajectory)
+        error( ...
+            'MonoTeach:InvalidTaskTrajectory', ...
+            'taskTrajectory must be one derived trajectory struct.');
+    end
+
+    requiredFields = {'coordinate_frame', 'metadata', 'samples'};
+    missingFields = requiredFields(~isfield(taskTrajectory, requiredFields));
+
+    if ~isempty(missingFields)
+        error( ...
+            'MonoTeach:MissingTaskTrajectoryField', ...
+            'taskTrajectory is missing required fields: %s.', ...
+            strjoin(missingFields, ', '));
+    end
+
+    if ~strcmp(string(taskTrajectory.coordinate_frame), "robot_base")
+        error( ...
+            'MonoTeach:InvalidTaskTrajectoryFrame', ...
+            'taskTrajectory.coordinate_frame must be "robot_base".');
+    end
+
+    if ~isstruct(taskTrajectory.metadata) || ...
+            ~isscalar(taskTrajectory.metadata) || ...
+            ~isfield(taskTrajectory.metadata, 'units') || ...
+            ~strcmp(string(taskTrajectory.metadata.units), "m")
+        error( ...
+            'MonoTeach:InvalidTaskTrajectoryUnits', ...
+            'taskTrajectory.metadata.units must be "m".');
+    end
+
+    samples = taskTrajectory.samples;
+
+    if isempty(samples)
+        return;
+    end
+
+    if ~isstruct(samples)
+        error( ...
+            'MonoTeach:InvalidTaskTrajectorySamples', ...
+            'taskTrajectory.samples must be a struct array.');
+    end
+
+    requiredSampleFields = { ...
+        't_ms', ...
+        'valid', ...
+        'inside_workspace', ...
+        'invalid_reason', ...
+        'x_m', ...
+        'y_m', ...
+        'z_m'};
+
+    for i = 1:numel(samples)
+        sample = samples(i);
+        context = sprintf('taskTrajectory.samples(%d)', i);
+        missingFields = ...
+            requiredSampleFields(~isfield(sample, requiredSampleFields));
+
+        if ~isempty(missingFields)
+            error( ...
+                'MonoTeach:MissingTaskTrajectoryField', ...
+                '%s is missing required fields: %s.', ...
+                context, ...
+                strjoin(missingFields, ', '));
+        end
+
+        require_nonnegative_finite_scalar(sample.t_ms, [context '.t_ms']);
+
+        if ~islogical(sample.valid) || ~isscalar(sample.valid) || ...
+                ~islogical(sample.inside_workspace) || ...
+                ~isscalar(sample.inside_workspace)
+            error( ...
+                'MonoTeach:InvalidTaskTrajectorySampleFlags', ...
+                '%s valid and inside_workspace must be logical scalars.', ...
+                context);
+        end
+
+        if sample.valid
+            require_finite_scalar(sample.x_m, [context '.x_m']);
+            require_finite_scalar(sample.y_m, [context '.y_m']);
+            require_finite_scalar(sample.z_m, [context '.z_m']);
+        elseif ~isempty(sample.x_m) || ~isempty(sample.y_m) || ...
+                ~isempty(sample.z_m)
+            error( ...
+                'MonoTeach:InvalidTaskTrajectoryGap', ...
+                '%s is invalid and must retain empty robot-base XYZ.', ...
+                context);
+        end
+    end
+end
+
+
+function require_nonnegative_finite_scalar(value, context)
+
+    require_finite_scalar(value, context);
+
+    if value < 0
+        error( ...
+            'MonoTeach:InvalidTaskTrajectoryTimestamp', ...
+            '%s must be non-negative.', ...
+            context);
+    end
+end
+
+
+function require_finite_scalar(value, context)
+
+    if ~isnumeric(value) || ~isscalar(value) || ~isreal(value) || ...
+            ~isfinite(value)
+        error( ...
+            'MonoTeach:InvalidTaskTrajectoryNumber', ...
+            '%s must be one finite numeric scalar.', ...
+            context);
+    end
+end

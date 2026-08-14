@@ -11,6 +11,7 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 2.1：完成 — C920 手部关键点与食指实时检测。
 - Stage 2.2：软件基线完成 — 二维轨迹录制、质量门控、EMA、JSON 持久化与按时间回放。
 - Stage 2.3：完成 — C920 标定资产加载、二维工作区标定/验证，以及毫米轨迹持久化与回放。
+- Stage 3.1A / 3.1B：完成 — MATLAB WorkspaceTrajectory bridge、Task Plane → Legacy robot base 几何重定向，以及 pre-IK eligibility / 连续候选段提取与可视化。
 
 ## 当前目录结构
 
@@ -57,6 +58,13 @@ MonoTeach/
 │   ├── display_geometry.py
 │   ├── verify_stage2_1.py
 │   └── models/README.md
+├── stage3/                         # MATLAB trajectory bridge / retargeting
+│   ├── load_workspace_trajectory.m
+│   ├── workspace_to_task_trajectory.m
+│   ├── build_preik_segments.m
+│   ├── verify_stage3_1a.m
+│   ├── verify_stage3_1b.m
+│   └── data/workspace_trajectory_fixture.json
 ├── tests/
 │   ├── test_stage0.py
 │   ├── test_stage1.m
@@ -80,6 +88,7 @@ MonoTeach/
 - Stage 2.1：接入 C920 与 MediaPipe HandLandmarker，输出单手 21 个 normalized landmarks、handedness 和食指指尖像素坐标。
 - Stage 2.2：以 immutable `raw_samples` 为唯一事实源，完成录制状态机、速度质量门控、EMA 派生轨迹、JSON 保存/加载和基于 `t_ms` 的回放。
 - Stage 2.3：加载 C920 K/D calibration asset，使用 `undistort_image_points()` 保持像素坐标语义；为 190 × 290 mm 工作区执行四点标定，保存 `WorkspaceCalibration` JSON（`H_image_to_workspace`）；以独立点进行毫米验证；将像素轨迹转换为 immutable `WorkspaceTrajectory2D`，并保存/加载、按毫米画布回放。
+- Stage 3.1A / 3.1B：MATLAB 严格读取 Stage 2.3 WorkspaceTrajectory JSON，映射到 Task Plane / Legacy robot base metres，并仅从 `valid && inside_workspace` 样本提取连续 pre-IK candidate segments；invalid 与 outside evidence 保留且都是 segment barrier。
 
 当前 independent validation baseline：mean ≈ 1.534 mm、RMS ≈ 1.696 mm、max ≈ 2.502 mm。验证真值为人工粗略量取，仅作为当前 baseline，不作为高精度计量结论。
 
@@ -162,6 +171,15 @@ python -m stage2.demo_workspace_trajectory_playback <workspace_trajectory.json> 
 
 OpenCV camera index 不是稳定硬件 ID；Windows 重新枚举后应先确认实际设备/index，再运行真实硬件入口。
 
+Stage 3.1 MATLAB bridge / retargeting（在仓库根目录）：
+
+```matlab
+addpath(fullfile(pwd, 'stage3'))
+verify_stage3_1a
+verify_stage3_1b
+results = runtests('tests/test_stage3_1.m'); disp(table(results))
+```
+
 ## Test / Verify / Manual Demo
 
 - `test`：自动化单元与回归测试，不依赖真实摄像头。
@@ -170,9 +188,9 @@ OpenCV camera index 不是稳定硬件 ID；Windows 重新枚举后应先确认�
 
 ## 当前工程边界 / 后续方向
 
-C920、二维工作区与毫米轨迹管线已接入。当前尚未实现：
+C920、二维工作区、毫米轨迹和 MATLAB pre-IK segment bridge 已接入。当前尚未实现：
 
-- Python ↔ MATLAB 轨迹接口。
+- Continuous IK 与 Legacy 5DOF trajectory execution。
 - ArUco / PnP 三维示教。
 - 安全轨迹重定向。
 - 6DOF 对照、Simulink / Simscape 与实物机械臂闭环。

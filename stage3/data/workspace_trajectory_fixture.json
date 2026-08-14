@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "source_trajectory_id": "stage3-1a-fixture",
+    "workspace_calibration_id": "workspace_2d_fixture_190x290",
+    "coordinate_frame": "workspace_2d",
+    "width_mm": 190.0,
+    "height_mm": 290.0
+  },
+  "samples": [
+    {
+      "t_ms": 0.0,
+      "valid": true,
+      "x_mm": 20.0,
+      "y_mm": 30.0,
+      "inside_workspace": true,
+      "invalid_reason": null
+    },
+    {
+      "t_ms": 100.0,
+      "valid": true,
+      "x_mm": 95.0,
+      "y_mm": 145.0,
+      "inside_workspace": true,
+      "invalid_reason": null
+    },
+    {
+      "t_ms": 200.0,
+      "valid": false,
+      "x_mm": null,
+      "y_mm": null,
+      "inside_workspace": false,
+      "invalid_reason": "no_hand"
+    },
+    {
+      "t_ms": 300.0,
+      "valid": true,
+      "x_mm": 180.0,
+      "y_mm": 280.0,
+      "inside_workspace": true,
+      "invalid_reason": null
+    },
+    {
+      "t_ms": 400.0,
+      "valid": true,
+      "x_mm": 205.0,
+      "y_mm": 100.0,
+      "inside_workspace": false,
+      "invalid_reason": null
+    }
+  ]
+}

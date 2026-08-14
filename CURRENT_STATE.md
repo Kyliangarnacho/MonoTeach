@@ -2,9 +2,9 @@
 
 ## 当前阶段
 
-**Stage 2.3 PASS**
+**Stage 3.1B PASS**
 
-已完成真实 Stage 2.3 E2E manual validation；Stage 2.1/2.2 基线保持不变。
+Stage 3.1A / Stage 3.1B 已人工验收 PASS；Stage 0 / Stage 1 / Stage 2.1 / Stage 2.2 / Stage 2.3 基线保持不变。
 
 ## 已完成基线
 
@@ -12,6 +12,18 @@
 - Stage 1：MATLAB 5DOF 数字机械臂、Python → MATLAB FK 交叉验证、数值 IK 与演示。
 - Stage 2.1：C920/OpenCV、MediaPipe HandLandmarker、单手 `HandObservation` 与食指像素坐标。
 - Stage 2.2：canonical immutable `raw_samples`、录制状态机、质量门控、EMA 派生轨迹、JSON 与按 `t_ms` 回放。
+
+## Stage 3.1A PASS
+
+- Python → MATLAB WorkspaceTrajectory bridge：MATLAB 严格读取并验证 Stage 2.3 `WorkspaceTrajectory` JSON schema 1.0；fixture 覆盖 valid、invalid gap 与 valid-but-outside 语义。
+- Workspace → Task Plane → Robot Base retargeting：以 190 × 290 mm workspace、默认 Task Plane 配置和 `T_base_taskplane` 将有效 workspace 点派生为 robot-base metre `TaskTrajectory`；保留 `t_ms`、invalid gap、inside/outside 证据与 source identity。
+- 已完成人工 MATLAB 验收；Python 自动化回归 138 passed；`tests/test_stage3_1.m` 13 项通过；`verify_stage3_1a` PASS。
+
+## Stage 3.1B PASS
+
+- pre-IK eligibility：仅 `valid && inside_workspace` 样本可进入候选段；invalid gap 与 valid-but-outside 都是 barrier，保留原始 evidence 而不自动连接。
+- 连续 segment 提取与可视化：输出 immutable-by-convention `segmentSet`，保留 source indices、时间范围、robot-base coordinate frame 与 metre units；各候选段独立显示，不跨 barrier 连线。
+- 已完成人工 MATLAB 验收；Python 自动化回归 138 passed；`tests/test_stage3_1.m` 13 项通过；`verify_stage3_1b` PASS。
 
 ## Stage 2.3
 
@@ -31,4 +43,4 @@
 
 ## 下一执行阶段
 
-Python ↔ MATLAB trajectory bridge / MATLAB robot execution 尚未开始。
+Stage 3.2：Pre-IK Segment → Continuous IK → Legacy 5DOF trajectory execution。当前尚未开始；将单独处理 IK、关节限位、连续性、速度规划与执行安全。
