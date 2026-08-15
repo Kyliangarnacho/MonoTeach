@@ -12,6 +12,7 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 2.2：软件基线完成 — 二维轨迹录制、质量门控、EMA、JSON 持久化与按时间回放。
 - Stage 2.3：完成 — C920 标定资产加载、二维工作区标定/验证，以及毫米轨迹持久化与回放。
 - Stage 3.1A / 3.1B：完成 — MATLAB WorkspaceTrajectory bridge、Task Plane → Legacy robot base 几何重定向，以及 pre-IK eligibility / 连续候选段提取与可视化。
+- Stage 3.2：完成 — Continuous Position-Only IK & Joint Waypoint Generation；包含 anchor/FK 回查、canonical IK result、previous-success-q 连续求解、failure barrier / q_anchor restart、关节限位与 continuity diagnostics，以及真实三角形静态验证。
 
 ## 当前目录结构
 
@@ -58,19 +59,27 @@ MonoTeach/
 │   ├── display_geometry.py
 │   ├── verify_stage2_1.py
 │   └── models/README.md
-├── stage3/                         # MATLAB trajectory bridge / retargeting
+├── stage3/                         # MATLAB bridge, retargeting, and Position-Only IK
 │   ├── load_workspace_trajectory.m
 │   ├── workspace_to_task_trajectory.m
 │   ├── build_preik_segments.m
+│   ├── default_ik_config.m
+│   ├── solve_anchor_ik.m
+│   ├── solve_ik_segments.m
+│   ├── summarize_ik_continuity.m
+│   ├── demo_continuous_ik.m
 │   ├── verify_stage3_1a.m
 │   ├── verify_stage3_1b.m
+│   ├── verify_stage3_2.m
 │   └── data/workspace_trajectory_fixture.json
 ├── tests/
 │   ├── test_stage0.py
 │   ├── test_stage1.m
 │   ├── test_stage2_1.py
 │   ├── test_stage2_2.py
-│   └── test_stage2_3.py
+│   ├── test_stage2_3.py
+│   ├── test_stage3_1.m
+│   └── test_stage3_2.m
 ├── data/                          # 本地 calibration / validation / trajectory JSON，运行时生成并被 Git 忽略
 ├── AGENTS.md
 ├── legacy_reference/               # 历史参考文件
@@ -89,6 +98,7 @@ MonoTeach/
 - Stage 2.2：以 immutable `raw_samples` 为唯一事实源，完成录制状态机、速度质量门控、EMA 派生轨迹、JSON 保存/加载和基于 `t_ms` 的回放。
 - Stage 2.3：加载 C920 K/D calibration asset，使用 `undistort_image_points()` 保持像素坐标语义；为 190 × 290 mm 工作区执行四点标定，保存 `WorkspaceCalibration` JSON（`H_image_to_workspace`）；以独立点进行毫米验证；将像素轨迹转换为 immutable `WorkspaceTrajectory2D`，并保存/加载、按毫米画布回放。
 - Stage 3.1A / 3.1B：MATLAB 严格读取 Stage 2.3 WorkspaceTrajectory JSON，映射到 Task Plane / Legacy robot base metres，并仅从 `valid && inside_workspace` 样本提取连续 pre-IK candidate segments；invalid 与 outside evidence 保留且都是 segment barrier。
+- Stage 3.2：以 deterministic Position-Only baseline 为每个 candidate target 求解 Legacy 5DOF IK；anchor 与每个成功点均有 FK XYZ 回查、显式 joint-limit / margin evidence 和 canonical result contract。连续成功点由 previous-success-q seed，failure 保留为 barrier 且后续从 q_anchor restart；输出带 source/time provenance 的 joint waypoints 与只读 `delta_q` continuity diagnostics。真实三角形静态验收为 91 / 91 success、0 failure，mean / max FK error 约 `6.689e-9` / `1.642e-7 m`。
 
 当前 independent validation baseline：mean ≈ 1.534 mm、RMS ≈ 1.696 mm、max ≈ 2.502 mm。验证真值为人工粗略量取，仅作为当前 baseline，不作为高精度计量结论。
 
@@ -180,6 +190,17 @@ verify_stage3_1b
 results = runtests('tests/test_stage3_1.m'); disp(table(results))
 ```
 
+Stage 3.2 Continuous Position-Only IK / joint waypoints（在仓库根目录）：
+
+```matlab
+addpath(fullfile(pwd, 'stage3'))
+addpath(fullfile(pwd, 'stage1'))
+verify_stage3_2
+results = runtests('tests/test_stage3_2.m'); disp(table(results))
+demo_continuous_ik('data/workspace_trajectories/<workspace_trajectory>.json')
+demo_ik_waypoint_snapshots('data/workspace_trajectories/<workspace_trajectory>.json')
+```
+
 ## Test / Verify / Manual Demo
 
 - `test`：自动化单元与回归测试，不依赖真实摄像头。
@@ -188,9 +209,9 @@ results = runtests('tests/test_stage3_1.m'); disp(table(results))
 
 ## 当前工程边界 / 后续方向
 
-C920、二维工作区、毫米轨迹和 MATLAB pre-IK segment bridge 已接入。当前尚未实现：
+C920、二维工作区、毫米轨迹和 MATLAB Position-Only continuous IK / joint waypoints 已接入。当前尚未实现：
 
-- Continuous IK 与 Legacy 5DOF trajectory execution。
+- 最终书写姿态约束、时间参数化、qdot/qddot、timed animation、碰撞与 Legacy 5DOF 执行安全。
 - ArUco / PnP 三维示教。
 - 安全轨迹重定向。
 - 6DOF 对照、Simulink / Simscape 与实物机械臂闭环。
