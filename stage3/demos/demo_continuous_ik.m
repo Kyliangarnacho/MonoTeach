@@ -26,10 +26,10 @@ function demo = demo_continuous_ik(jsonPath)
             jsonPath);
     end
 
-    stage3Dir = fileparts(mfilename('fullpath'));
+    stage3Dir = fileparts(fileparts(mfilename('fullpath')));
     repoRoot = fileparts(stage3Dir);
     stage1Dir = fullfile(repoRoot, 'stage1');
-    addpath(stage3Dir);
+    addpath(genpath(stage3Dir));
     addpath(stage1Dir);
 
     % Desired task XYZ comes from the unchanged Stage 2.3 workspace samples

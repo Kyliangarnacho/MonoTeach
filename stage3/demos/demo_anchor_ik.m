@@ -5,9 +5,9 @@
 clear;
 clc;
 
-stage3Dir = fileparts(mfilename('fullpath'));
+stage3Dir = fileparts(fileparts(mfilename('fullpath')));
 repoDir = fileparts(stage3Dir);
-addpath(stage3Dir);
+addpath(genpath(stage3Dir));
 addpath(fullfile(repoDir, 'stage1'));
 
 robot = build_legacy_robot();

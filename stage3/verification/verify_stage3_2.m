@@ -7,9 +7,9 @@ clear;
 clc;
 format long g;
 
-stage3Dir = fileparts(mfilename('fullpath'));
+stage3Dir = fileparts(fileparts(mfilename('fullpath')));
 repoRoot = fileparts(stage3Dir);
-addpath(stage3Dir);
+addpath(genpath(stage3Dir));
 addpath(fullfile(repoRoot, 'stage1'));
 
 fprintf('============================================\n');

@@ -1,7 +1,7 @@
 function taskTrajectory = workspace_to_task_trajectory( ...
         workspaceTrajectory, ...
         config)
-%WORKSPACE_TO_TASK_TRAJECTORY Map a workspace-mm trajectory into robot base m.
+%WORKSPACE_TO_TASK_TRAJECTORY Legacy-compatible workspace-to-robot mapping.
 %
 % Inputs:
 %   workspaceTrajectory - validated Stage 2.3 workspace trajectory struct
@@ -13,6 +13,8 @@ function taskTrajectory = workspace_to_task_trajectory( ...
 %
 % This function performs only a geometric coordinate transform. It does not
 % segment gaps, solve IK, animate the robot, or modify workspaceTrajectory.
+% New code may first form CanonicalTaskTrajectory and call
+% retarget_task_to_robot; that adapter deliberately reuses this mapping.
 
     validate_workspace_trajectory(workspaceTrajectory);
     validate_task_plane_config(config);

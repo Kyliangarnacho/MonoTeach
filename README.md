@@ -59,18 +59,16 @@ MonoTeach/
 │   ├── display_geometry.py
 │   ├── verify_stage2_1.py
 │   └── models/README.md
-├── stage3/                         # MATLAB bridge, retargeting, and Position-Only IK
-│   ├── load_workspace_trajectory.m
-│   ├── workspace_to_task_trajectory.m
-│   ├── build_preik_segments.m
-│   ├── default_ik_config.m
-│   ├── solve_anchor_ik.m
-│   ├── solve_ik_segments.m
-│   ├── summarize_ik_continuity.m
-│   ├── demo_continuous_ik.m
-│   ├── verify_stage3_1a.m
-│   ├── verify_stage3_1b.m
-│   ├── verify_stage3_2.m
+├── stage3/                         # MATLAB bridge, IK, Writing and trajectory artifacts
+│   ├── config/                     # Stage 3 configuration factories
+│   ├── core/                       # Workspace/task conversion and pre-IK segments
+│   ├── ik/                         # Position-only and Writing IK pipelines
+│   ├── writing/                    # Writing posture, placement, and feasibility tools
+│   ├── resampling/                 # Arc-length trajectory artifacts
+│   ├── trajectory/                 # Timing and continuous joint trajectories
+│   ├── diagnostics/                # Focused analyses and visual diagnostics
+│   ├── demos/                      # Manual MATLAB demos
+│   ├── verification/               # Stage verification and FK validation helpers
 │   └── data/workspace_trajectory_fixture.json
 ├── tests/
 │   ├── test_stage0.py
@@ -79,7 +77,8 @@ MonoTeach/
 │   ├── test_stage2_2.py
 │   ├── test_stage2_3.py
 │   ├── test_stage3_1.m
-│   └── test_stage3_2.m
+│   ├── test_stage3_2.m
+│   └── test_stage3_3.m
 ├── data/                          # 本地 calibration / validation / trajectory JSON，运行时生成并被 Git 忽略
 ├── AGENTS.md
 ├── legacy_reference/               # 历史参考文件
@@ -184,7 +183,7 @@ OpenCV camera index 不是稳定硬件 ID；Windows 重新枚举后应先确认�
 Stage 3.1 MATLAB bridge / retargeting（在仓库根目录）：
 
 ```matlab
-addpath(fullfile(pwd, 'stage3'))
+addpath(genpath(fullfile(pwd, 'stage3')))
 verify_stage3_1a
 verify_stage3_1b
 results = runtests('tests/test_stage3_1.m'); disp(table(results))
@@ -193,7 +192,7 @@ results = runtests('tests/test_stage3_1.m'); disp(table(results))
 Stage 3.2 Continuous Position-Only IK / joint waypoints（在仓库根目录）：
 
 ```matlab
-addpath(fullfile(pwd, 'stage3'))
+addpath(genpath(fullfile(pwd, 'stage3')))
 addpath(fullfile(pwd, 'stage1'))
 verify_stage3_2
 results = runtests('tests/test_stage3_2.m'); disp(table(results))

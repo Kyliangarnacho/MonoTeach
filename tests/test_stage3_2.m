@@ -16,10 +16,12 @@ function setupOnce(testCase)
     stage3Dir = fullfile(repoRoot, 'stage3');
     stage1Dir = fullfile(repoRoot, 'stage1');
 
-    addpath(stage3Dir);
+    stage3Path = genpath(stage3Dir);
+    addpath(stage3Path);
     addpath(stage1Dir);
 
     testCase.TestData.stage3Dir = stage3Dir;
+    testCase.TestData.stage3Path = stage3Path;
     testCase.TestData.stage1Dir = stage1Dir;
     testCase.TestData.robot = build_legacy_robot();
     testCase.TestData.taskPlaneConfig = default_task_plane_config();
@@ -30,7 +32,7 @@ end
 function teardownOnce(testCase)
 
     rmpath(testCase.TestData.stage1Dir);
-    rmpath(testCase.TestData.stage3Dir);
+    rmpath(testCase.TestData.stage3Path);
 end
 
 

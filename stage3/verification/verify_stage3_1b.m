@@ -13,13 +13,13 @@ format long g;
 % 0. Resolve paths
 % -------------------------------------------------------------
 
-stage3Dir = fileparts(mfilename('fullpath'));
+stage3Dir = fileparts(fileparts(mfilename('fullpath')));
 fixturePath = fullfile( ...
     stage3Dir, ...
     'data', ...
     'workspace_trajectory_fixture.json');
 
-addpath(stage3Dir);
+addpath(genpath(stage3Dir));
 
 fprintf('============================================\n');
 fprintf('MonoTeach Stage 3.1B Final Verification\n');

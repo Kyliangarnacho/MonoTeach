@@ -13,11 +13,11 @@ function demo_preik_segments(jsonPath)
             'demo_preik_segments requires exactly one JSON path.');
     end
 
-    stage3Dir = fileparts(mfilename('fullpath'));
+    stage3Dir = fileparts(fileparts(mfilename('fullpath')));
     repoRoot = fileparts(stage3Dir);
     stage1Dir = fullfile(repoRoot, 'stage1');
 
-    addpath(stage3Dir);
+    addpath(genpath(stage3Dir));
     addpath(stage1Dir);
 
     % Preserve the data-flow order used by the future IK stage.

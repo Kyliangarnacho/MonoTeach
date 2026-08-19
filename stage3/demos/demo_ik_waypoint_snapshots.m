@@ -20,9 +20,9 @@ function demo = demo_ik_waypoint_snapshots(jsonPath)
             'demo_ik_waypoint_snapshots requires one JSON path.');
     end
 
-    stage3Dir = fileparts(mfilename('fullpath'));
+    stage3Dir = fileparts(fileparts(mfilename('fullpath')));
     repoRoot = fileparts(stage3Dir);
-    addpath(stage3Dir);
+    addpath(genpath(stage3Dir));
     addpath(fullfile(repoRoot, 'stage1'));
 
     % Reuse the unchanged Stage 3.1 -> Stage 3.2 pipeline. This retains any

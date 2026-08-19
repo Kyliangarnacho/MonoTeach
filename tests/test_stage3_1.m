@@ -14,14 +14,19 @@ function setupOnce(testCase)
     testsDir = fileparts(testFile);
     repoRoot = fileparts(testsDir);
     stage3Dir = fullfile(repoRoot, 'stage3');
+    stage1Dir = fullfile(repoRoot, 'stage1');
     fixturePath = fullfile( ...
         stage3Dir, ...
         'data', ...
         'workspace_trajectory_fixture.json');
 
-    addpath(stage3Dir);
+    stage3Path = genpath(stage3Dir);
+    addpath(stage3Path);
+    addpath(stage1Dir);
 
     testCase.TestData.stage3Dir = stage3Dir;
+    testCase.TestData.stage3Path = stage3Path;
+    testCase.TestData.stage1Dir = stage1Dir;
     testCase.TestData.fixturePath = fixturePath;
     testCase.TestData.trajectory = load_workspace_trajectory(fixturePath);
     testCase.TestData.taskPlaneConfig = default_task_plane_config();
@@ -33,7 +38,8 @@ end
 
 function teardownOnce(testCase)
 
-    rmpath(testCase.TestData.stage3Dir);
+    rmpath(testCase.TestData.stage3Path);
+    rmpath(testCase.TestData.stage1Dir);
 end
 
 
@@ -42,6 +48,63 @@ function testFixtureLoadsWithSupportedSchema(testCase)
     trajectory = testCase.TestData.trajectory;
 
     verifyEqual(testCase, string(trajectory.schema_version), "1.0");
+end
+
+
+function testLegacy5RobotContextMatchesFrozenModel(testCase)
+
+    context = load_robot_context("legacy5");
+    legacyModel = build_legacy_robot();
+
+    verifyEqual(testCase, context.id, 'legacy5');
+    verifyEqual(testCase, context.backend, 'matlab_rigidbodytree');
+    verifyEqual(testCase, context.dof, numel(homeConfiguration(legacyModel)));
+    verifyEqual(testCase, context.model.NumBodies, legacyModel.NumBodies);
+    verifyEqual(testCase, context.home_q, homeConfiguration(legacyModel), ...
+        'AbsTol', 1e-12);
+    verifyEqual(testCase, context.end_effector, 'body5');
+    expectedLimits = zeros(context.dof, 2);
+    expectedNames = cell(1, context.dof);
+    for index = 1:context.dof
+        expectedLimits(index, :) = legacyModel.Bodies{index}.Joint.PositionLimits;
+        expectedNames{index} = legacyModel.Bodies{index}.Joint.Name;
+    end
+    verifyEqual(testCase, context.joint_limits, expectedLimits, 'AbsTol', 1e-12);
+    verifyEqual(testCase, context.joint_names, expectedNames);
+    config = default_timed_joint_trajectory_config(context);
+    verifyEqual(testCase, config.max_velocity_rad_s, context.velocity_limits, ...
+        'AbsTol', 1e-12);
+    verifyEqual(testCase, config.max_acceleration_rad_s2, ...
+        context.acceleration_limits, 'AbsTol', 1e-12);
+end
+
+
+function testCanonicalTaskRetargetAdapterPreservesLegacyMapping(testCase)
+
+    workspace = testCase.TestData.trajectory;
+    workspaceBefore = workspace;
+    context = load_robot_context("legacy5");
+    task = workspace_to_canonical_task(workspace);
+    taskBefore = task;
+    robotTask = retarget_task_to_robot(task, context, ...
+        testCase.TestData.taskPlaneConfig);
+    legacyTask = workspace_to_task_trajectory(workspace, ...
+        testCase.TestData.taskPlaneConfig);
+
+    verifyEqual(testCase, workspace, workspaceBefore);
+    verifyEqual(testCase, task, taskBefore);
+    verifyEqual(testCase, task.artifact_type, 'CanonicalTaskTrajectory');
+    verifyEqual(testCase, string(task.coordinate_frame), "workspace_2d");
+    verifyEqual(testCase, robotTask.artifact_type, 'RobotTargetTrajectory');
+    verifyEqual(testCase, robotTask.robot_id, context.id);
+    verifyEqual(testCase, robotTask.coordinate_frame, legacyTask.coordinate_frame);
+    verifyEqual(testCase, robotTask.metadata, legacyTask.metadata);
+    verifyEqual(testCase, robotTask.samples, legacyTask.samples);
+    adaptedSegments = build_preik_segments(robotTask);
+    legacySegments = build_preik_segments(legacyTask);
+    verifyEqual(testCase, adaptedSegments.summary, legacySegments.summary);
+    verifyEqual(testCase, {adaptedSegments.segments.source_indices}, ...
+        {legacySegments.segments.source_indices});
 end
 
 
