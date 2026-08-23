@@ -24,6 +24,7 @@ from .trajectory_quality import (
     apply_quality_gate,
 )
 from .trajectory_recorder import RecorderState, TrajectoryRecorder
+from .pen_state import PenState, PenStateController, PinchToggleConfig, PinchToggleDetector
 
 
 EMA_ALPHA_PRESETS = {
@@ -109,6 +110,8 @@ def recording_status_lines(
     ema_alpha: float,
     notice: str | None = None,
     mirror_preview: bool | None = None,
+    pen_state: str = "UP",
+    stroke_id: int = 0,
 ) -> tuple[str, ...]:
     """Build recorder status text without a camera dependency."""
     samples = recorder.samples
@@ -122,6 +125,8 @@ def recording_status_lines(
     )
     lines = (
         f"Recorder: {recorder.state.name}",
+        f"PEN: {pen_state}",
+        f"STROKE: {stroke_id}",
         f"Raw samples: {recorder.sample_count}",
         f"Accepted: {accepted_count}",
         f"Speed rejected: {rejected_speed_count}",
@@ -143,6 +148,8 @@ def draw_recording_status(
     ema_alpha: float,
     notice: str | None,
     mirror_preview: bool,
+    pen_state: str,
+    stroke_id: int,
 ) -> None:
     """Overlay recorder state, counts, duration, controls, and optional notice."""
     for line_number, line in enumerate(
@@ -152,6 +159,8 @@ def draw_recording_status(
             ema_alpha,
             notice,
             mirror_preview,
+            pen_state,
+            stroke_id,
         )
     ):
         color = (0, 255, 255) if line_number == 0 else (255, 255, 255)
@@ -180,6 +189,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     last_saved_path: Path | None = None
     mirror_preview = True
     ema_alpha = EMAConfig().alpha
+    pinch_detector = PinchToggleDetector(PinchToggleConfig())
+    pen_controller = PenStateController()
 
     try:
         profile = stream.open()
@@ -200,8 +211,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 frame, timestamp_ms = stream.read()
                 observation = tracker.process(frame, timestamp_ms)
 
+                pinch_toggled = False
                 if recorder.state is RecorderState.RECORDING:
-                    recorder.record(observation)
+                    if pinch_detector.update(observation):
+                        transition = pen_controller.toggle()
+                        pinch_toggled = True
+                        if transition.ends_stroke:
+                            recorder.record_pen_up_barrier(timestamp_ms)
+                            notice = f"Stroke {pen_controller.display_stroke_id} ended."
+                        else:
+                            notice = f"Stroke {transition.stroke_id} started."
+
+                    if pen_controller.state is PenState.DOWN and not pinch_toggled:
+                        recorder.record(
+                            observation,
+                            pen_state=PenState.DOWN.value,
+                            stroke_id=pen_controller.active_stroke_id,
+                        )
 
                 now = time.perf_counter()
                 elapsed_seconds = max(now - previous_time, 1e-9)
@@ -245,6 +271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ema_alpha,
                     notice,
                     mirror_preview,
+                    pen_controller.state.value,
+                    pen_controller.display_stroke_id,
                 )
 
                 cv2.imshow("MonoTeach Stage 2.2 Trajectory Recorder", display_frame)
@@ -253,6 +281,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     return 0
                 if key in (ord("r"), ord("R")):
                     recorder.reset()
+                    pinch_detector = PinchToggleDetector(PinchToggleConfig())
+                    pen_controller = PenStateController()
                     recording_metadata = None
                     last_saved_path = None
                     notice = "Recorder reset; press Space to start."
@@ -307,7 +337,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         frame_height=frame_height,
                         camera_index=config.index,
                     )
-                    notice = "Recording started."
+                    pinch_detector = PinchToggleDetector(PinchToggleConfig())
+                    pen_controller = PenStateController()
+                    notice = "Recording started; PEN is UP. Pinch to start stroke 1."
                 elif recorder.state is RecorderState.RECORDING:
                     recorder.stop()
                     notice = "Recording stopped; press R before a new recording."

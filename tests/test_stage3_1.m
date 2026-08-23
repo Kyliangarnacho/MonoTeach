@@ -320,3 +320,56 @@ function testPreIkSegmentationDoesNotModifyTaskTrajectory(testCase)
     verifyEqual(testCase, string(segmentSet.coordinate_frame), "robot_base");
     verifyEqual(testCase, string(segmentSet.units), "m");
 end
+
+
+function testLegacyTaskSemanticsDefaultToOneDownStroke(testCase)
+
+    legacyWorkspace = testCase.TestData.trajectory;
+    legacyWorkspace.samples = legacyWorkspace.samples(1:2);
+    legacyWorkspaceBefore = legacyWorkspace;
+
+    canonicalTask = workspace_to_canonical_task(legacyWorkspace);
+    semanticStrokeSet = derive_semantic_strokes(canonicalTask);
+
+    verifyEqual(testCase, legacyWorkspace, legacyWorkspaceBefore);
+    verifyEqual(testCase, ...
+        string(canonicalTask.metadata.task_semantics.semantic_source), ...
+        "legacy_single_stroke_default");
+    verifyTrue(testCase, canonicalTask.metadata.task_semantics.legacy_default_applied);
+    verifyEqual(testCase, string({canonicalTask.samples.pen_state}), ...
+        ["DOWN", "DOWN"]);
+    verifyEqual(testCase, [canonicalTask.samples.stroke_id], [1, 1]);
+    verifyEqual(testCase, semanticStrokeSet.summary.semantic_stroke_count, 1);
+    verifyEqual(testCase, semanticStrokeSet.strokes(1).stroke_id, 1);
+    verifyEqual(testCase, semanticStrokeSet.strokes(1).source_indices, [1, 2]);
+end
+
+
+function testExplicitUpBoundarySeparatesSemanticStrokes(testCase)
+
+    samples = repmat(struct('pen_state', '', 'stroke_id', NaN), 1, 5);
+    penStates = {'DOWN', 'DOWN', 'UP', 'DOWN', 'DOWN'};
+    strokeIds = [1, 1, NaN, 2, 2];
+    for i = 1:numel(samples)
+        samples(i).pen_state = penStates{i};
+        samples(i).stroke_id = strokeIds(i);
+    end
+    task = struct( ...
+        'artifact_type', 'CanonicalTaskTrajectory', ...
+        'samples', samples);
+    taskBefore = task;
+
+    % Both DOWN runs may be IK-successful, but their UP boundary remains a
+    % task semantic boundary rather than an execution-segment decision.
+    successfulExecutionSourceIndices = [1, 2, 4, 5];
+    verifyEqual(testCase, numel(successfulExecutionSourceIndices), 4);
+    semanticStrokeSet = derive_semantic_strokes(task);
+
+    verifyEqual(testCase, task, taskBefore);
+    verifyEqual(testCase, semanticStrokeSet.summary.semantic_stroke_count, 2);
+    verifyEqual(testCase, [semanticStrokeSet.strokes.stroke_id], [1, 2]);
+    verifyEqual(testCase, ...
+        {semanticStrokeSet.strokes.source_indices}, {[1, 2], [4, 5]});
+    verifyEqual(testCase, ...
+        [semanticStrokeSet.strokes.semantic_stroke_index], [1, 2]);
+end

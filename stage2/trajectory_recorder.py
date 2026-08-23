@@ -91,7 +91,13 @@ class TrajectoryRecorder:
         self._state = RecorderState.RECORDING
         return metadata
 
-    def record(self, observation: HandObservation) -> TrajectorySample | None:
+    def record(
+        self,
+        observation: HandObservation,
+        *,
+        pen_state: str | None = None,
+        stroke_id: int | None = None,
+    ) -> TrajectorySample | None:
         """Record one observation while RECORDING; IDLE is an explicit no-op."""
         if self._state is RecorderState.IDLE:
             return None
@@ -112,9 +118,42 @@ class TrajectoryRecorder:
         sample = observation_to_trajectory_sample(
             observation,
             self._metadata.recording_start_timestamp_ms,
+            pen_state=pen_state,
+            stroke_id=stroke_id,
         )
         self._working_samples.append(sample)
         self._last_observation_timestamp_ms = observation.timestamp_ms
+        return sample
+
+    def record_pen_up_barrier(self, timestamp_ms: float) -> TrajectorySample | None:
+        """Append one non-writing UP marker without recording fingertip motion."""
+        if self._state is RecorderState.IDLE:
+            return None
+        if self._state is RecorderState.READY:
+            raise RuntimeError(
+                "Cannot record while recorder state is READY; call reset() first."
+            )
+        if self._metadata is None:
+            raise RuntimeError("Recorder metadata is unavailable while RECORDING.")
+        previous_timestamp = self._last_observation_timestamp_ms
+        if previous_timestamp is not None and timestamp_ms <= previous_timestamp:
+            raise ValueError(
+                "Observation timestamps must be strictly increasing: "
+                f"received {timestamp_ms} after {previous_timestamp}."
+            )
+        sample = TrajectorySample(
+            t_ms=timestamp_ms - self._metadata.recording_start_timestamp_ms,
+            valid=False,
+            x_norm=None,
+            y_norm=None,
+            u=None,
+            v=None,
+            invalid_reason="pen_up",
+            pen_state="UP",
+            stroke_id=None,
+        )
+        self._working_samples.append(sample)
+        self._last_observation_timestamp_ms = timestamp_ms
         return sample
 
     def stop(self) -> Trajectory2D:

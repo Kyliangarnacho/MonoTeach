@@ -6,13 +6,17 @@ function task = workspace_to_canonical_task(workspaceTrajectory)
 % It intentionally contains no robot-base coordinates and no joint states.
 
     validate_workspace_trajectory(workspaceTrajectory);
+    [semanticSamples, semanticContract] = ...
+        normalize_task_semantics(workspaceTrajectory.samples);
     task = struct();
     task.artifact_type = 'CanonicalTaskTrajectory';
     task.coordinate_frame = workspaceTrajectory.metadata.coordinate_frame;
     task.units = 'mm';
     task.source_schema_version = workspaceTrajectory.schema_version;
     task.metadata = workspaceTrajectory.metadata;
-    task.samples = workspaceTrajectory.samples;
+    task.metadata.task_semantics = semanticContract;
+    task.samples = semanticSamples;
+    task.semantic_stroke_contract = semanticContract;
     task.barrier_semantics = 'invalid_or_outside_workspace_is_not_interpolated';
     task.source_workspace_trajectory = workspaceTrajectory;
 end

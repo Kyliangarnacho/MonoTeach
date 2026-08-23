@@ -9,6 +9,10 @@ function robotTask = retarget_task_to_robot(task, robotContext, taskPlaneConfig)
     legacyCompatible = workspace_to_task_trajectory( ...
         task.source_workspace_trajectory, taskPlaneConfig);
     robotTask = legacyCompatible;
+    robotTask.samples = copy_task_semantics( ...
+        legacyCompatible.samples, task.samples);
+    robotTask.metadata.task_semantics = task.semantic_stroke_contract;
+    robotTask.semantic_stroke_contract = task.semantic_stroke_contract;
     robotTask.artifact_type = 'RobotTargetTrajectory';
     robotTask.robot_id = robotContext.id;
     robotTask.robot_backend = robotContext.backend;
@@ -31,5 +35,20 @@ function validate_inputs(task, context)
             'joint_limits', 'backend'})) || context.dof < 1
         error('MonoTeach:InvalidRobotTaskRetargetInput', ...
             'Retargeting requires a canonical task and a complete RobotContext.');
+    end
+end
+
+
+function retargetedSamples = copy_task_semantics(retargetedSamples, canonicalSamples)
+
+    if numel(retargetedSamples) ~= numel(canonicalSamples) || ...
+            ~all(isfield(canonicalSamples, {'pen_state', 'stroke_id'}))
+        error('MonoTeach:InvalidRobotTaskSemantics', ...
+            'Canonical task semantics must align one-to-one with its source samples.');
+    end
+
+    for i = 1:numel(retargetedSamples)
+        retargetedSamples(i).pen_state = canonicalSamples(i).pen_state;
+        retargetedSamples(i).stroke_id = canonicalSamples(i).stroke_id;
     end
 end

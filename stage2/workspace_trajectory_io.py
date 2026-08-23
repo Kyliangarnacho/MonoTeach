@@ -33,7 +33,7 @@ def save_workspace_trajectory_json(
     payload = {
         "schema_version": "1.0",
         "metadata": asdict(trajectory.metadata),
-        "samples": [asdict(sample) for sample in trajectory.samples],
+        "samples": [_sample_payload(sample) for sample in trajectory.samples],
     }
     output_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -114,6 +114,15 @@ def _safe_filename_component(value: str, fallback: str) -> str:
     return safe_value or fallback
 
 
+def _sample_payload(sample: WorkspaceTrajectorySample) -> dict[str, Any]:
+    """Omit absent semantic fields to preserve the legacy workspace JSON contract."""
+    data = asdict(sample)
+    if data["pen_state"] is None and data["stroke_id"] is None:
+        data.pop("pen_state")
+        data.pop("stroke_id")
+    return data
+
+
 def _load_sample(value: Any, index: int) -> WorkspaceTrajectorySample:
     context = f"samples[{index}]"
     data = _require_mapping(value, context)
@@ -138,6 +147,8 @@ def _load_sample(value: Any, index: int) -> WorkspaceTrajectorySample:
             data["invalid_reason"],
             f"{context}.invalid_reason",
         ),
+        pen_state=_optional_string(data.get("pen_state"), f"{context}.pen_state"),
+        stroke_id=_optional_integer(data.get("stroke_id"), f"{context}.stroke_id"),
     )
 
 
@@ -175,3 +186,15 @@ def _optional_number(value: Any, context: str) -> float | None:
     if value is None:
         return None
     return _require_number(value, context)
+
+
+def _require_integer(value: Any, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{context} must be an integer.")
+    return value
+
+
+def _optional_integer(value: Any, context: str) -> int | None:
+    if value is None:
+        return None
+    return _require_integer(value, context)

@@ -22,6 +22,8 @@ class TrajectorySample:
     u: int | None
     v: int | None
     invalid_reason: str | None = None
+    pen_state: str | None = None
+    stroke_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.t_ms < 0:
@@ -29,6 +31,18 @@ class TrajectorySample:
 
         coordinates = (self.x_norm, self.y_norm, self.u, self.v)
         coordinates_present = tuple(value is not None for value in coordinates)
+
+        has_semantics = self.pen_state is not None or self.stroke_id is not None
+        if has_semantics:
+            if self.pen_state not in {"DOWN", "UP"}:
+                raise ValueError("pen_state must be DOWN or UP when supplied.")
+            if self.pen_state == "DOWN":
+                if not isinstance(self.stroke_id, int) or isinstance(self.stroke_id, bool) or self.stroke_id < 1:
+                    raise ValueError("DOWN samples require a positive integer stroke_id.")
+            elif self.stroke_id is not None:
+                raise ValueError("UP samples must not carry a stroke_id.")
+            if self.valid and self.pen_state != "DOWN":
+                raise ValueError("A valid writing sample must have pen_state DOWN.")
 
         if self.valid:
             if not all(coordinates_present):
@@ -82,6 +96,8 @@ class Trajectory2D:
 def observation_to_trajectory_sample(
     observation: HandObservation,
     recording_start_timestamp_ms: float,
+    pen_state: str | None = None,
+    stroke_id: int | None = None,
 ) -> TrajectorySample:
     """Convert one hand observation into a raw trajectory sample."""
     t_ms = observation.timestamp_ms - recording_start_timestamp_ms
@@ -99,6 +115,8 @@ def observation_to_trajectory_sample(
             u=None,
             v=None,
             invalid_reason="no_hand",
+            pen_state=pen_state,
+            stroke_id=stroke_id,
         )
 
     if observation.index_tip_norm is None or observation.index_tip_px is None:
@@ -116,4 +134,6 @@ def observation_to_trajectory_sample(
         u=u,
         v=v,
         invalid_reason=None,
+        pen_state=pen_state,
+        stroke_id=stroke_id,
     )

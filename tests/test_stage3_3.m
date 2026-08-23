@@ -1567,6 +1567,250 @@ function testGeneralizationBenchmarkMetricsAreFrozenAndOrderIndependent(testCase
 end
 
 
+function testConstrainedGapRecoveryWindowsRespectPreIKBoundaries(testCase)
+
+    [preIk, strict] = gap_recovery_window_fixture();
+    preIkBefore = preIk;
+    strictBefore = strict;
+    windows = build_constrained_path_recovery_windows(preIk, strict);
+
+    verifyEqual(testCase, preIk, preIkBefore);
+    verifyEqual(testCase, strict, strictBefore);
+    verifyEqual(testCase, numel(windows), 1);
+    window = windows(1);
+    verifyEqual(testCase, window.gap_index, 1);
+    verifyEqual(testCase, window.preik_segment_index, 1);
+    verifyEqual(testCase, window.left_success_index, 101);
+    verifyEqual(testCase, window.right_success_index, 103);
+    verifyEqual(testCase, window.failed_indices, 102);
+    verifyEqual(testCase, window.original_writing_targets.target_xyz_m, ...
+        strict.failures(1).target_xyz_m, 'AbsTol', 1e-12);
+    verifyEqual(testCase, window.failed_source_provenance{1}.resampled_index, 102);
+end
+
+
+function testConstrainedGapRecoveryMaintainsTargetsAndAcceptance(testCase)
+
+    [preIk, strict, context, posture, lookup] = ...
+        gap_recovery_reachable_fixture(testCase);
+    preIkBefore = preIk;
+    strictBefore = strict;
+    contextBefore = context;
+    config = default_constrained_path_gap_recovery_config(posture);
+    configBefore = config;
+    windows = build_constrained_path_recovery_windows(preIk, strict);
+    recovery = recover_constrained_path_gaps(context, windows, posture, config, lookup);
+    execution = derive_recovered_writing_execution(preIk, strict, recovery);
+
+    verifyEqual(testCase, preIk, preIkBefore);
+    verifyEqual(testCase, strict, strictBefore);
+    verifyEqual(testCase, context, contextBefore);
+    verifyEqual(testCase, config, configBefore);
+    verifyEqual(testCase, recovery.summary.recovered_point_count, 1);
+    verifyEqual(testCase, recovery.summary.remaining_failed_point_count, 0);
+    verifyEqual(testCase, recovery.summary.fully_reconnected_gap_count, 1);
+    point = recovery.window_results(1).recovered_points(1);
+    verifyEqual(testCase, point.original_target_xyz_m, ...
+        strict.failures.target_xyz_m, 'AbsTol', 1e-12);
+    verifyEqual(testCase, point.original_target_tool_direction, ...
+        strict.failures.signed_normal_base, 'AbsTol', 1e-12);
+    verifyLessThanOrEqual(testCase, ...
+        point.final_relaxed_direction_tolerance_deg, ...
+        config.max_recovery_direction_tolerance_deg + 1e-12);
+    verifyLessThanOrEqual(testCase, point.position_error_m, ...
+        posture.position_tolerance_m + 1e-12);
+    verifyLessThanOrEqual(testCase, point.tool_direction_error_deg, ...
+        point.final_relaxed_direction_tolerance_deg + 1e-10);
+    verifyTrue(testCase, point.within_joint_limits);
+    verifyEqual(testCase, point.recovery_reason, ...
+        'orientation_constraint_relaxation');
+    verifyEqual(testCase, point.provenance.resampled_index, 102);
+    verifyEqual(testCase, execution.summary.remaining_failure_count, 0);
+    verifyEqual(testCase, execution.summary.writing_execution_segment_count_after, 1);
+end
+
+
+function testConstrainedGapRecoveryKeepsIncompleteBarrierAndOrder(testCase)
+
+    [preIk, strict, context, posture, lookup] = ...
+        gap_recovery_reachable_fixture(testCase);
+    strict.failures.target_xyz_m = [10, 10, 10];
+    strict.failures.aim_target_m = [10, 10.05, 10];
+    windows = build_constrained_path_recovery_windows(preIk, strict);
+    config = default_constrained_path_gap_recovery_config(posture);
+    recovery = recover_constrained_path_gaps(context, windows, posture, config, lookup);
+    execution = derive_recovered_writing_execution(preIk, strict, recovery);
+
+    verifyFalse(testCase, recovery.window_results.fully_reconnected);
+    verifyEqual(testCase, recovery.summary.remaining_failed_point_count, 1);
+    verifyEqual(testCase, execution.summary.remaining_failure_count, 1);
+    verifyEqual(testCase, execution.summary.writing_execution_segment_count_after, 2);
+
+    [twoPreIk, twoStrict, twoLookup] = gap_recovery_two_window_fixture( ...
+        preIk, strict, lookup);
+    twoWindows = build_constrained_path_recovery_windows(twoPreIk, twoStrict);
+    forward = recover_constrained_path_gaps(context, twoWindows, posture, config, twoLookup);
+    reverse = recover_constrained_path_gaps(context, fliplr(twoWindows), posture, config, twoLookup);
+    for index = 1:numel(forward.window_results)
+        source = forward.window_results(index);
+        match = find([reverse.window_results.gap_index] == source.gap_index, 1, 'first');
+        verifyNotEmpty(testCase, match);
+        reordered = reverse.window_results(match);
+        verifyEqual(testCase, reordered.recovered_point_count, source.recovered_point_count);
+        verifyEqual(testCase, reordered.remaining_failed_point_count, ...
+            source.remaining_failed_point_count);
+        verifyEqual(testCase, reordered.recovered_points.q, ...
+            source.recovered_points.q, 'AbsTol', 1e-12);
+    end
+end
+
+
+function testConstrainedGapRecoveryConfigUsesFrozenMonotonicLadder(testCase)
+
+    posture = default_writing_posture_config();
+    config = default_constrained_path_gap_recovery_config(posture);
+    verifyEqual(testCase, config.strict_direction_tolerance_deg, ...
+        rad2deg(posture.aiming_angular_tolerance_rad), 'AbsTol', 1e-12);
+    verifyTrue(testCase, all(diff(config.direction_tolerance_ladder_deg) > 0));
+    verifyEqual(testCase, config.direction_tolerance_ladder_deg(1), ...
+        config.strict_direction_tolerance_deg, 'AbsTol', 1e-12);
+    verifyLessThanOrEqual(testCase, config.direction_tolerance_ladder_deg(end), ...
+        config.max_recovery_direction_tolerance_deg + 1e-12);
+    verifyEqual(testCase, config.position_tolerance_m, posture.position_tolerance_m, ...
+        'AbsTol', 1e-15);
+    verifyFalse(testCase, config.allow_random_restart);
+end
+
+
+function [preIk, strict] = gap_recovery_window_fixture()
+
+    normal = [0, 1, 0];
+    q = zeros(1, 5);
+    samplesOne = [ ...
+        gap_recovery_sample(0, 101, [0.1, 0.06, 0.195]), ...
+        gap_recovery_sample(1, 102, [0.101, 0.06, 0.195]), ...
+        gap_recovery_sample(2, 103, [0.102, 0.06, 0.195])];
+    samplesTwo = [ ...
+        gap_recovery_sample(3, 201, [0.103, 0.06, 0.195]), ...
+        gap_recovery_sample(4, 202, [0.104, 0.06, 0.195])];
+    preIk = struct('segments', [ ...
+        struct('source_indices', [101, 102, 103], 'samples', samplesOne, ...
+            'original_run_index', 1), ...
+        struct('source_indices', [201, 202], 'samples', samplesTwo, ...
+            'original_run_index', 2)]);
+    successes = [ ...
+        gap_recovery_success(101, samplesOne(1), q, normal), ...
+        gap_recovery_success(103, samplesOne(3), q, normal), ...
+        gap_recovery_success(202, samplesTwo(2), q, normal)];
+    failures = [ ...
+        gap_recovery_failure(102, samplesOne(2), normal), ...
+        gap_recovery_failure(201, samplesTwo(1), normal)];
+    strict = struct('segments', struct('results', successes), ...
+        'failures', failures);
+end
+
+
+function [preIk, strict, context, posture, lookup] = ...
+        gap_recovery_reachable_fixture(testCase)
+
+    context = load_robot_context('legacy5');
+    posture = default_writing_posture_config();
+    candidate = default_writing_candidate_config();
+    taskPlane = build_writing_candidate_task_plane_config( ...
+        testCase.TestData.taskPlaneConfig, candidate);
+    centerSeed = resolve_writing_candidate_center_seed(context.model, taskPlane, ...
+        testCase.TestData.ikConfig, posture, candidate);
+    normal = candidate.normal_sign * derive_task_plane_normal(taskPlane)';
+    xyz = taskPlane.robot_anchor_m;
+    samples = [ ...
+        gap_recovery_sample(0, 101, xyz), ...
+        gap_recovery_sample(1, 102, xyz), ...
+        gap_recovery_sample(2, 103, xyz)];
+    preIk = struct('segments', struct('source_indices', [101, 102, 103], ...
+        'samples', samples, 'original_run_index', 1));
+    strict = struct('segments', [ ...
+        struct('results', gap_recovery_success(101, samples(1), centerSeed.q, normal)), ...
+        struct('results', gap_recovery_success(103, samples(3), centerSeed.q, normal))], ...
+        'failures', gap_recovery_failure(102, samples(2), normal), ...
+        'summary', struct('success_point_count', 2, 'ik_success_segment_count', 2));
+    lookup = struct('source_indices', 102, 'q_rad', centerSeed.q, ...
+        'provenance', 'same_source_position_only_q');
+end
+
+
+function [preIk, strict, lookup] = gap_recovery_two_window_fixture( ...
+        preIk, strict, lookup)
+
+    source = preIk.segments(1);
+    centerXYZ = [source.samples(1).x_m, source.samples(1).y_m, ...
+        source.samples(1).z_m];
+    source.samples = [source.samples, ...
+        gap_recovery_sample(3, 104, centerXYZ)];
+    source.samples = [source.samples, ...
+        gap_recovery_sample(4, 105, centerXYZ)];
+    source.source_indices = [101, 102, 103, 104, 105];
+    preIk.segments = source;
+    normal = strict.failures.signed_normal_base;
+    q = strict.segments(1).results.q;
+    strict.segments = [ ...
+        struct('results', gap_recovery_success(101, source.samples(1), q, normal)), ...
+        struct('results', gap_recovery_success(103, source.samples(3), q, normal)), ...
+        struct('results', gap_recovery_success(105, source.samples(5), q, normal))];
+    strict.failures = [ ...
+        gap_recovery_failure(102, source.samples(2), normal), ...
+        gap_recovery_failure(104, source.samples(4), normal)];
+    strict.summary = struct('success_point_count', 3, 'ik_success_segment_count', 3);
+    lookup.source_indices = [102, 104];
+    lookup.q_rad = [q; q];
+end
+
+
+function sample = gap_recovery_sample(tMs, sourceIndex, xyz)
+
+    sample = struct('t_ms', tMs, 'valid', true, 'inside_workspace', true, ...
+        'invalid_reason', '', 'x_m', xyz(1), 'y_m', xyz(2), 'z_m', xyz(3), ...
+        'resampled_index', sourceIndex, ...
+        'source_bracket_indices', [sourceIndex, sourceIndex], ...
+        'interpolation_ratio', 0.0, 'original_run_index', 1, ...
+        'source_arclength_m', 0.001 * sourceIndex);
+end
+
+
+function result = gap_recovery_success(sourceIndex, sample, q, normal)
+
+    provenance = gap_recovery_provenance(sourceIndex, sample);
+    result = struct('source_index', sourceIndex, 't_ms', sample.t_ms, ...
+        'q', q, 'target_xyz_m', [sample.x_m, sample.y_m, sample.z_m], ...
+        'aim_target_m', [sample.x_m, sample.y_m, sample.z_m] + 0.05 * normal, ...
+        'signed_normal_base', normal, 'fk_xyz_m', [sample.x_m, sample.y_m, sample.z_m], ...
+        'position_error_m', 0.0, 'tool_direction_error_deg', 0.0, ...
+        'joint_limit_margin', ones(1, 5), 'resampled_provenance', provenance);
+end
+
+
+function failure = gap_recovery_failure(sourceIndex, sample, normal)
+
+    provenance = gap_recovery_provenance(sourceIndex, sample);
+    failure = struct('source_index', sourceIndex, 't_ms', sample.t_ms, ...
+        'target_xyz_m', [sample.x_m, sample.y_m, sample.z_m], ...
+        'aim_target_m', [sample.x_m, sample.y_m, sample.z_m] + 0.05 * normal, ...
+        'signed_normal_base', normal, 'reason', ...
+        'tool_direction_error_exceeds_tolerance', ...
+        'resampled_provenance', provenance);
+end
+
+
+function provenance = gap_recovery_provenance(sourceIndex, sample)
+
+    provenance = struct('resampled_index', sourceIndex, ...
+        'xyz_m', [sample.x_m, sample.y_m, sample.z_m], ...
+        'source_bracket_indices', sample.source_bracket_indices, ...
+        'interpolation_ratio', sample.interpolation_ratio, ...
+        'original_run_index', sample.original_run_index, ...
+        'source_arclength_m', sample.source_arclength_m);
+end
+
+
 function segmentSet = synthetic_writing_failure_segment_set(centerM)
 
     samples = [ ...
@@ -1765,4 +2009,29 @@ function sample = task_sample(tMs, valid, inside, xyzM)
         sample.z_m = [];
         sample.invalid_reason = 'synthetic_invalid';
     end
+end
+
+
+function testRealPositionOnlyTimedE2EContract(testCase)
+
+    e2e = run_real_position_only_timed_e2e();
+    summary = e2e.summary;
+    segment = e2e.continuous_joint_trajectory.segments(1);
+
+    verifyEqual(testCase, e2e.execution_baseline, ...
+        'position_only_29_of_29_real_2mm_triangle');
+    verifyEqual(testCase, summary.position_only_success_point_count, 29);
+    verifyEqual(testCase, summary.position_only_failure_count, 0);
+    verifyEqual(testCase, summary.execution_segment_count, 1);
+    verifyEqual(testCase, e2e.continuous_joint_trajectory.generation_method, ...
+        'quintic_hermite_v1');
+    verifyTrue(testCase, all(isfinite(segment.q_rad), 'all'));
+    verifyTrue(testCase, all(isfinite(segment.qd_rad_s), 'all'));
+    verifyTrue(testCase, all(isfinite(segment.qdd_rad_s2), 'all'));
+    verifyTrue(testCase, summary.velocity_limits_satisfied);
+    verifyTrue(testCase, summary.acceleration_limits_satisfied);
+    verifyTrue(testCase, summary.joint_limits_satisfied);
+    verifyTrue(testCase, isfinite(summary.mean_fk_path_deviation_m));
+    verifyTrue(testCase, isfinite(summary.max_fk_path_deviation_m));
+    verifyTrue(testCase, isfinite(summary.minimum_joint_limit_margin));
 end

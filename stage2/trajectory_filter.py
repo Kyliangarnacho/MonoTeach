@@ -66,6 +66,8 @@ def apply_ema_filter(
                 u=u,
                 v=v,
                 invalid_reason=None,
+                pen_state=sample.pen_state,
+                stroke_id=sample.stroke_id,
             )
         )
 

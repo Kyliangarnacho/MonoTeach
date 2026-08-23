@@ -49,7 +49,7 @@ def save_trajectory_json(
         "schema_version": trajectory.metadata.schema_version,
         "trajectory_id": trajectory.metadata.trajectory_id,
         "metadata": asdict(trajectory.metadata),
-        "raw_samples": [asdict(sample) for sample in trajectory.raw_samples],
+        "raw_samples": [_sample_payload(sample) for sample in trajectory.raw_samples],
         "processing": {
             "quality_gate": {
                 "max_normalized_speed": quality_config.max_normalized_speed,
@@ -169,12 +169,23 @@ def _new_output_path(directory: Path, trajectory_id: str) -> Path:
     if not safe_id:
         safe_id = "trajectory"
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+
+
     candidate = directory / f"{safe_id}_{timestamp}.json"
     suffix = 1
     while candidate.exists():
         candidate = directory / f"{safe_id}_{timestamp}_{suffix}.json"
         suffix += 1
     return candidate
+
+
+def _sample_payload(sample: TrajectorySample) -> dict[str, Any]:
+    """Omit absent semantic fields so legacy JSON remains byte-schema compatible."""
+    data = asdict(sample)
+    if data["pen_state"] is None and data["stroke_id"] is None:
+        data.pop("pen_state")
+        data.pop("stroke_id")
+    return data
 
 
 def _load_sample(value: Any, index: int) -> TrajectorySample:
@@ -195,6 +206,8 @@ def _load_sample(value: Any, index: int) -> TrajectorySample:
         invalid_reason=_optional_string(
             sample["invalid_reason"], f"{context}.invalid_reason"
         ),
+        pen_state=_optional_string(sample.get("pen_state"), f"{context}.pen_state"),
+        stroke_id=_optional_integer(sample.get("stroke_id"), f"{context}.stroke_id"),
     )
 
 

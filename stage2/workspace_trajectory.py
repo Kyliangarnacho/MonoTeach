@@ -40,6 +40,8 @@ class WorkspaceTrajectorySample:
     y_mm: float | None
     inside_workspace: bool
     invalid_reason: str | None = None
+    pen_state: str | None = None
+    stroke_id: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "t_ms", _finite_nonnegative(self.t_ms, "t_ms"))
@@ -49,6 +51,18 @@ class WorkspaceTrajectorySample:
             raise TypeError("inside_workspace must be a boolean.")
         object.__setattr__(self, "valid", bool(self.valid))
         object.__setattr__(self, "inside_workspace", bool(self.inside_workspace))
+
+        has_semantics = self.pen_state is not None or self.stroke_id is not None
+        if has_semantics:
+            if self.pen_state not in {"DOWN", "UP"}:
+                raise ValueError("pen_state must be DOWN or UP when supplied.")
+            if self.pen_state == "DOWN":
+                if not isinstance(self.stroke_id, int) or isinstance(self.stroke_id, bool) or self.stroke_id < 1:
+                    raise ValueError("DOWN samples require a positive integer stroke_id.")
+            elif self.stroke_id is not None:
+                raise ValueError("UP samples must not carry a stroke_id.")
+            if self.valid and self.pen_state != "DOWN":
+                raise ValueError("A valid workspace sample must have pen_state DOWN.")
 
         if self.valid:
             if self.x_mm is None or self.y_mm is None:
@@ -131,6 +145,8 @@ def _invalid_workspace_sample(sample: TrajectorySample) -> WorkspaceTrajectorySa
         y_mm=None,
         inside_workspace=False,
         invalid_reason=sample.invalid_reason,
+        pen_state=sample.pen_state,
+        stroke_id=sample.stroke_id,
     )
 
 
@@ -198,6 +214,8 @@ def trajectory_to_workspace(
                     workspace_calibration.workspace_definition,
                 ),
                 invalid_reason=None,
+                pen_state=sample.pen_state,
+                stroke_id=sample.stroke_id,
             )
         )
 

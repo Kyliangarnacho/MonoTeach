@@ -41,6 +41,8 @@ def _rejected_copy(sample: TrajectorySample, reason: str) -> TrajectorySample:
         u=sample.u,
         v=sample.v,
         invalid_reason=reason,
+        pen_state=sample.pen_state,
+        stroke_id=sample.stroke_id,
     )
 
 
