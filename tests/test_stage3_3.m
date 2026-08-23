@@ -2035,3 +2035,103 @@ function testRealPositionOnlyTimedE2EContract(testCase)
     verifyTrue(testCase, isfinite(summary.max_fk_path_deviation_m));
     verifyTrue(testCase, isfinite(summary.minimum_joint_limit_margin));
 end
+function testContopptrajRetimingUsesExistingQuinticPath(testCase)
+
+    context = load_robot_context('legacy5');
+    timed = time_parameterize_ik_success_segments( ...
+        synthetic_monotonic_timed_ik_result_set(), ...
+        default_timed_joint_trajectory_config(context), context);
+    continuous = generate_quintic_continuous_joint_trajectory( ...
+        timed, timed.timing_config, context);
+    diagnostic = diagnose_contopptraj_retiming(timed, continuous, context, 100);
+
+    if ~diagnostic.available
+        verifyEqual(testCase, diagnostic.unavailable_reason, ...
+            'contopptraj_not_available_on_matlab_path');
+        return;
+    end
+    verifyEqual(testCase, diagnostic.path_source, ...
+        'existing_quintic_piecewise_polynomial');
+    verifyEqual(testCase, diagnostic.summary.segment_count, 1);
+    segment = diagnostic.segments(1);
+    verifyTrue(testCase, all(isfinite(segment.q_rad), 'all'));
+    verifyTrue(testCase, all(isfinite(segment.qd_rad_s), 'all'));
+    verifyTrue(testCase, all(isfinite(segment.qdd_rad_s2), 'all'));
+    verifyTrue(testCase, segment.velocity_limits_satisfied);
+    verifyTrue(testCase, segment.acceleration_limits_satisfied);
+    verifyTrue(testCase, segment.joint_limits_satisfied);
+    verifyEqual(testCase, segment.q_rad(1, :), continuous.segments(1).q_rad(1, :), ...
+        'AbsTol', 1e-10);
+    verifyEqual(testCase, segment.q_rad(end, :), continuous.segments(1).q_rad(end, :), ...
+        'AbsTol', 1e-10);
+    verifyTrue(testCase, isfinite(segment.mean_fk_path_deviation_m));
+    verifyTrue(testCase, isfinite(segment.max_fk_path_deviation_m));
+    verifyTrue(testCase, all(isfinite(segment.common_path_fk_deviation_m)));
+    verifyTrue(testCase, all(isfinite(segment.geometric_fk_distance_to_baseline_m)));
+    verifyTrue(testCase, all(isfinite(segment.geometric_fk_distance_from_baseline_m)));
+    verifyTrue(testCase, all(isfinite(segment.temporal_reference_deviation_m)));
+    verifyTrue(testCase, isfinite(diagnostic.summary.max_joint_space_geometric_deviation_rad));
+    verifyTrue(testCase, isfinite(diagnostic.summary.max_geometric_fk_distance_m));
+end
+
+
+function testSemanticTransitionIsBoundaryTriggeredAndPenUp(testCase)
+
+    taskPlane = testCase.TestData.taskPlaneConfig;
+    strokeSet = synthetic_two_stroke_set();
+    transitionConfig = default_semantic_stroke_transition_config();
+    transitionConfig.samples_per_leg = 3;
+    transitions = plan_semantic_stroke_transitions( ...
+        strokeSet, taskPlane, transitionConfig);
+
+    verifyEqual(testCase, transitions.summary.transition_count, 1);
+    transition = transitions.transitions(1);
+    verifyEqual(testCase, transition.from_stroke_id, 1);
+    verifyEqual(testCase, transition.to_stroke_id, 2);
+    verifyTrue(testCase, all(strcmp(transition.pen_state, 'UP')));
+    verifyTrue(testCase, all(isnan(transition.stroke_id)));
+    verifyEqual(testCase, transition.xyz_m(1, :), ...
+        [0.105, 0.040, 0.255], 'AbsTol', 1e-12);
+    verifyEqual(testCase, transition.xyz_m(end, :), ...
+        [0.120, 0.040, 0.245], 'AbsTol', 1e-12);
+    verifyEqual(testCase, norm(transition.xyz_m(3, :) - ...
+        ([0.105, 0.040, 0.255] + transitionConfig.lift_distance_m * [0, 1, 0])), ...
+        0.0, 'AbsTol', 1e-12);
+    verifyEqual(testCase, string(transition.phase([1, 4, end])), ...
+        ["lift"; "transfer"; "lower"]);
+end
+
+
+function testNoSemanticBoundaryMeansNoTransition(testCase)
+
+    oneStroke = synthetic_two_stroke_set();
+    oneStroke.strokes = oneStroke.strokes(1);
+    transitions = plan_semantic_stroke_transitions( ...
+        oneStroke, testCase.TestData.taskPlaneConfig, ...
+        default_semantic_stroke_transition_config());
+    verifyEqual(testCase, transitions.summary.transition_count, 0);
+    verifyTrue(testCase, isempty(transitions.transitions));
+end
+
+
+function strokeSet = synthetic_two_stroke_set()
+
+    sampleA = semantic_sample(1, [0.100, 0.040, 0.255], 1);
+    sampleB = semantic_sample(2, [0.105, 0.040, 0.255], 1);
+    sampleC = semantic_sample(3, [0.120, 0.040, 0.245], 2);
+    sampleD = semantic_sample(4, [0.125, 0.040, 0.245], 2);
+    strokeOne = struct('semantic_stroke_index', 1, 'stroke_id', 1, ...
+        'source_indices', [1, 2], 'samples', [sampleA, sampleB]);
+    strokeTwo = struct('semantic_stroke_index', 2, 'stroke_id', 2, ...
+        'source_indices', [3, 4], 'samples', [sampleC, sampleD]);
+    strokeSet = struct('artifact_type', 'SemanticStrokeSet', ...
+        'strokes', [strokeOne, strokeTwo]);
+end
+
+
+function sample = semantic_sample(sourceIndex, xyz, strokeId)
+
+    sample = struct('source_index', sourceIndex, 'x_m', xyz(1), ...
+        'y_m', xyz(2), 'z_m', xyz(3), 'pen_state', 'DOWN', ...
+        'stroke_id', strokeId);
+end

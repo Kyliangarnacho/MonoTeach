@@ -13,7 +13,7 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 2.3：完成 — C920 标定资产加载、二维工作区标定/验证，以及毫米轨迹持久化与回放。
 - Stage 3.1A / 3.1B：完成 — MATLAB WorkspaceTrajectory bridge、Task Plane → Legacy robot base 几何重定向，以及 pre-IK eligibility / 连续候选段提取与可视化。
 - Stage 3.2：完成 — Continuous Position-Only IK & Joint Waypoint Generation；包含 anchor/FK 回查、canonical IK result、previous-success-q 连续求解、failure barrier / q_anchor restart、关节限位与 continuity diagnostics，以及真实三角形静态验证。
-- Stage 3.3 CORE：完成 — CanonicalTask / RobotContext 最小边界、2 mm 任务空间等弧长重采样、真实三角形 Position-Only 29/29 单段 IK、TimedJointTrajectory、quintic_hermite_v1 连续轨迹与时间拉伸、FK 验证、timed MATLAB animation，以及 pen_state / stroke_id semantic-stroke 基础。
+- Stage 3.3 CORE：完成 — CanonicalTask / RobotContext 最小边界、2 mm 任务空间等弧长重采样、真实三角形 Position-Only 29/29 单段 IK、TimedJointTrajectory、quintic_hermite_v1 连续轨迹与时间拉伸、FK 验证、可直接观察 Legacy5 link/joint 运动的 timed MATLAB animation，以及 pen_state / stroke_id semantic-stroke 基础。
 
 ## 当前目录结构
 
@@ -100,7 +100,7 @@ MonoTeach/
 - Stage 2.3：加载 C920 K/D calibration asset，使用 `undistort_image_points()` 保持像素坐标语义；为 190 × 290 mm 工作区执行四点标定，保存 `WorkspaceCalibration` JSON（`H_image_to_workspace`）；以独立点进行毫米验证；将像素轨迹转换为 immutable `WorkspaceTrajectory2D`，并保存/加载、按毫米画布回放。
 - Stage 3.1A / 3.1B：MATLAB 严格读取 Stage 2.3 WorkspaceTrajectory JSON，映射到 Task Plane / Legacy robot base metres，并仅从 `valid && inside_workspace` 样本提取连续 pre-IK candidate segments；invalid 与 outside evidence 保留且都是 segment barrier。
 - Stage 3.2：以 deterministic Position-Only baseline 为每个 candidate target 求解 Legacy 5DOF IK；anchor 与每个成功点均有 FK XYZ 回查、显式 joint-limit / margin evidence 和 canonical result contract。连续成功点由 previous-success-q seed，failure 保留为 barrier 且后续从 q_anchor restart；输出带 source/time provenance 的 joint waypoints 与只读 `delta_q` continuity diagnostics。真实三角形静态验收为 91 / 91 success、0 failure，mean / max FK error 约 `6.689e-9` / `1.642e-7 m`。
-- Stage 3.3 CORE：引入不绑定机械臂关节的 CanonicalTaskTrajectory 与 RobotContext(legacy5) 边界。冻结候选 placement 后，真实 C920 triangle 经 2 mm resampling 的 Position-Only E2E 为 29 / 29 success、1 execution segment；TimedJointTrajectory 经 quintic_hermite_v1 与 planning velocity/acceleration time stretch 后，连续 FK temporal-reference mean / max deviation 为约 2.979e-5 / 3.445e-4 m，minimum joint-limit margin 约 0.983 rad，并提供 timed MATLAB animation。该 Position-Only baseline 不等同于 strict Writing 全路径可行性或实体机器人安全认证。
+- Stage 3.3 CORE：引入不绑定机械臂关节的 CanonicalTaskTrajectory 与 RobotContext(legacy5) 边界。冻结候选 placement 后，真实 C920 triangle 经 2 mm resampling 的 Position-Only E2E 为 29 / 29 success、1 execution segment；TimedJointTrajectory 经 quintic_hermite_v1 与 planning velocity/acceleration time stretch 后，连续 FK temporal-reference mean / max deviation 为约 2.979e-5 / 3.445e-4 m，minimum joint-limit margin 约 0.983 rad。正式执行 baseline 保持 Position-Only + Quintic V1；`contopptraj`/TOPP-RA 仅作为已验证的几何保持型替代 retiming diagnostic，不替换正式 timing。源/重采样 timestamps 保留为 provenance，human-temporal replay 延期。timed MATLAB animation 使用同一 rigidBodyTree FK 实时显示 Legacy5 links/joints、desired path 与 FK trail。该 Position-Only baseline 不等同于 strict Writing 全路径可行性或实体机器人安全认证。
 
 当前 independent validation baseline：mean ≈ 1.534 mm、RMS ≈ 1.696 mm、max ≈ 2.502 mm。验证真值为人工粗略量取，仅作为当前 baseline，不作为高精度计量结论。
 
@@ -211,7 +211,7 @@ demo_ik_waypoint_snapshots('data/workspace_trajectories/<workspace_trajectory>.j
 
 ## 当前工程边界 / 后续方向
 
-C920、二维工作区、毫米轨迹、semantic stroke、MATLAB Position-Only timed continuous trajectory 和 animation 已接入。当前尚未实现：
+C920、二维工作区、毫米轨迹、semantic stroke、MATLAB Position-Only timed continuous trajectory 和 animation 已接入。semantic stroke boundary 已有仅 task-space 的 pen-up lift → transfer → lower artifact；它尚未接入完整多笔机器人执行链，也没有 collision planning。当前尚未实现：
 
 - multi-stroke free-space transition、碰撞与 Legacy 5DOF 实体执行安全。
 - strict Writing 29 / 29 优化；当前 Legacy5 真实 2 mm triangle strict Writing 为 25 / 29，orientation-relaxation、backward rescue 与 gap recovery 仅为 diagnostic / experiment，不是正式 Position-Only E2E policy。

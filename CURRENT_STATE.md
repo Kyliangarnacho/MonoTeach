@@ -42,13 +42,15 @@ Stage 3.1、Stage 3.2 与 Stage 3.3 CORE 已验收；Stage 0 / Stage 1 / Stage 2
 - Minimal robot-independent boundary：CanonicalTaskTrajectory 与 RobotContext(legacy5) 已接入；RobotContext 的 velocity/acceleration 是 planning defaults，不是实测 actuator ratings。
 - 真实 C920 triangle 使用冻结 candidate、2 mm task-space arc-length resampling、fresh Position-Only IK：29 / 29 success、0 failure、1 execution segment。
 - TimedJointTrajectory 逐 success segment 独立生成；quintic_hermite_v1 使用确定性内部 finite-difference velocity/acceleration，并在必要时 uniform time stretch 满足 planning velocity/acceleration limits。
+- 正式 execution baseline 保持 Position-Only + quintic_hermite_v1。contopptraj/TOPP-RA 已验证为保持现有 Quintic path 的替代 retiming diagnostic，但不替换正式 timing；source/resampled timestamps 仅保留为 provenance，human-temporal replay 延期。
 - 本地重新运行 E2E：duration = 4.3014898123 s；velocity / acceleration / joint limits 均 PASS；FK temporal-reference mean / max deviation = 2.9786966e-5 / 3.4453247e-4 m；minimum joint-limit margin = 0.9834568 rad。
-- timed MATLAB animation 显示 Legacy5、desired Position-Only path、executed FK trail、current t_s 与 playback rate；默认标准 3D oblique view 已程序化验证，不会以 top-view 将竖直 Task Plane 压成线。
-- semantic stroke foundation：当前真实 triangle 为 1 semantic stroke；semantic stroke 与 IK execution segment 分离。未来多 stroke free-space transition 尚未实现。
+- timed MATLAB animation 直接显示由 rigidBodyTree FK 更新的 Legacy5 links/joints、desired Position-Only path、executed FK trail、current t_s 与 playback rate；默认标准 3D oblique view 已程序化验证，不会以 top-view 将竖直 Task Plane 压成线。
+- semantic stroke foundation：当前真实 triangle 为 1 semantic stroke；semantic stroke 与 IK execution segment 分离。相邻 semantic strokes 已有仅 task-space 的 pen-up lift → transfer → lower transition artifact；它没有形成完整多笔机器人执行链，也没有 collision planning。
 
 ## Stage 3.3 DIAGNOSTIC / NEGATIVE RESULTS
 
 - strict Writing（XYZ + body5 local-Z aiming）在真实 2 mm triangle 为 25 / 29；不进入正式 Position-Only E2E execution baseline。
+- 对当前 Writing task 的局部运动学诊断显示 J5 对 XYZ + body5 local-Z 约束近乎 task-invisible；这支持 Legacy5 在该严格定义下的结构性限制，但不是对全局构型的可达性宣称。
 - Writing generalization、Task Plane height/yaw/XY/scale sweeps、multi-start/backward rescue、orientation relaxation、Constrained Path Gap Recovery，以及 minimum-jerk / cubic diagnostics 均保留为诊断或负结果，不是正式 execution policy。
 
 ## Stage 2.3

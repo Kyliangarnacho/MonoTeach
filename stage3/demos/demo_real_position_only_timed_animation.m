@@ -31,13 +31,17 @@ function demo = demo_real_position_only_timed_animation(jsonPath, playbackRate)
     xlabel(axesHandle, 'Base X [m]'); ylabel(axesHandle, 'Base Y [m]');
     zlabel(axesHandle, 'Base Z [m]');
     title(axesHandle, 'Legacy5 Position-Only Quintic V1 timed playback');
-    legend(axesHandle, 'Location', 'best');
+
     textHandle = text(axesHandle, 0.02, 0.98, '', 'Units', 'normalized', ...
         'VerticalAlignment', 'top', 'FontWeight', 'bold');
-    set_base_limits(axesHandle, [geometry.reference_xyz_m; geometry.fk_xyz_m]);
+    robotDisplayPoints = robot_display_points(robot, segment.q_rad);
+    displayPoints = [geometry.reference_xyz_m; geometry.fk_xyz_m; robotDisplayPoints];
+    set_base_limits(axesHandle, displayPoints);
 
-    show(robot, segment.q_rad(1, :), 'Parent', axesHandle, ...
-        'PreservePlot', true, 'Frames', 'off');
+    robotHandles = render_robot(robot, segment.q_rad(1, :), axesHandle);
+    skeletonHandle = render_legacy5_skeleton(robot, segment.q_rad(1, :), axesHandle);
+    axis(axesHandle, 'equal');
+    set_base_limits(axesHandle, displayPoints);
     view(axesHandle, 3);
     startTime = segment.t_s(1);
     wallClock = tic;
@@ -45,18 +49,23 @@ function demo = demo_real_position_only_timed_animation(jsonPath, playbackRate)
         desiredWallTime = (segment.t_s(index) - startTime) / playbackRate;
         remaining = desiredWallTime - toc(wallClock);
         if remaining > 0, pause(remaining); end
-        show(robot, segment.q_rad(index, :), 'Parent', axesHandle, ...
-            'PreservePlot', false, 'Frames', 'off');
+        delete(robotHandles(isgraphics(robotHandles)));
+        robotHandles = render_robot(robot, segment.q_rad(index, :), axesHandle);
+        update_legacy5_skeleton(skeletonHandle, robot, segment.q_rad(index, :));
+        axis(axesHandle, 'equal');
+        set_base_limits(axesHandle, displayPoints);
         view(axesHandle, 3);
         set(trailHandle, 'XData', geometry.fk_xyz_m(1:index,1), ...
             'YData', geometry.fk_xyz_m(1:index,2), ...
             'ZData', geometry.fk_xyz_m(1:index,3));
         set(textHandle, 'String', sprintf('t = %.3f / %.3f s  |  playback %.2fx', ...
             segment.t_s(index), segment.t_s(end), playbackRate));
+
         drawnow;
     end
     demo = struct('e2e', e2e, 'playback_rate', playbackRate, ...
-        'figure', figureHandle, 'axes', axesHandle, 'executed_fk_trail', trailHandle);
+        'figure', figureHandle, 'axes', axesHandle, ...
+        'robot_skeleton', skeletonHandle, 'executed_fk_trail', trailHandle);
 end
 
 
@@ -86,4 +95,58 @@ function set_base_limits(ax, points)
     xlim(ax, [lower(1) - padding(1), upper(1) + padding(1)]);
     ylim(ax, [lower(2) - padding(2), upper(2) + padding(2)]);
     zlim(ax, [lower(3) - padding(3), upper(3) + padding(3)]);
+end
+
+
+function points = robot_display_points(robot, qTrajectory)
+
+    bodyCount = robot.NumBodies;
+    sampleIndices = unique([1:10:size(qTrajectory, 1), size(qTrajectory, 1)]);
+    points = zeros(1 + numel(sampleIndices) * bodyCount, 3);
+    nextIndex = 1;
+    points(nextIndex, :) = [0, 0, 0];
+    for sampleIndex = sampleIndices
+        q = qTrajectory(sampleIndex, :);
+        for bodyIndex = 1:bodyCount
+            nextIndex = nextIndex + 1;
+            pose = getTransform(robot, q, robot.Bodies{bodyIndex}.Name);
+            points(nextIndex, :) = pose(1:3, 4)';
+        end
+    end
+    points = points(1:nextIndex, :);
+end
+
+function robotHandles = render_robot(robot, q, ax)
+
+    existingChildren = ax.Children;
+    show(robot, q, 'Parent', ax, 'PreservePlot', true, 'Frames', 'off');
+    currentChildren = ax.Children;
+    robotHandles = currentChildren(~ismember(currentChildren, existingChildren));
+end
+
+function skeletonHandle = render_legacy5_skeleton(robot, q, ax)
+
+    points = body_origin_points(robot, q);
+    skeletonHandle = plot3(ax, points(:,1), points(:,2), points(:,3), '-o', ...
+        'Color', [0.10, 0.35, 0.85], 'LineWidth', 5.0, 'MarkerSize', 8.0, ...
+        'MarkerFaceColor', [1.00, 0.55, 0.10], 'MarkerEdgeColor', [0.05, 0.05, 0.05], ...
+        'HandleVisibility', 'off');
+end
+
+
+function update_legacy5_skeleton(skeletonHandle, robot, q)
+
+    points = body_origin_points(robot, q);
+    set(skeletonHandle, 'XData', points(:,1), 'YData', points(:,2), ...
+        'ZData', points(:,3));
+end
+
+
+function points = body_origin_points(robot, q)
+
+    points = zeros(robot.NumBodies + 1, 3);
+    for bodyIndex = 1:robot.NumBodies
+        pose = getTransform(robot, q, robot.Bodies{bodyIndex}.Name);
+        points(bodyIndex + 1, :) = pose(1:3, 4)';
+    end
 end
