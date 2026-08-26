@@ -14,6 +14,8 @@ MonoTeach 是一个单目视觉机械臂示教项目。Stage 0 和 Stage 1 建�
 - Stage 3.1A / 3.1B：完成 — MATLAB WorkspaceTrajectory bridge、Task Plane → Legacy robot base 几何重定向，以及 pre-IK eligibility / 连续候选段提取与可视化。
 - Stage 3.2：完成 — Continuous Position-Only IK & Joint Waypoint Generation；包含 anchor/FK 回查、canonical IK result、previous-success-q 连续求解、failure barrier / q_anchor restart、关节限位与 continuity diagnostics，以及真实三角形静态验证。
 - Stage 3.3 CORE：完成 — CanonicalTask / RobotContext 最小边界、2 mm 任务空间等弧长重采样、真实三角形 Position-Only 29/29 单段 IK、TimedJointTrajectory、quintic_hermite_v1 连续轨迹与时间拉伸、FK 验证、可直接观察 Legacy5 link/joint 运动的 timed MATLAB animation，以及 pen_state / stroke_id semantic-stroke 基础。
+- Stage 3.4：完成并冻结 — 以 canonical `WorkspaceTrajectory2D` 为输入的离线 `ReplaySource`，将“点按源时间逐个到达”接入 rolling Cartesian quintic、FIFO、MATLAB IK、连续 `q(t)` 与 100 Hz 虚拟执行器；真实三角形回放已完成软件验收。
+- Stage 3.5：软件链完成，保留一次最终 C920 人工验收 — C920/MediaPipe 的实时食指观测经标定、相对映射、TCP NDJSON 送往 MATLAB；MATLAB 负责 IK、`q(t)` FIFO、100 Hz 数字孪生与全关节可视化。真实相机的最终干净运行仍应以当前标定文件单独确认。
 
 ## 当前目录结构
 
@@ -70,6 +72,8 @@ MonoTeach/
 │   ├── diagnostics/                # Focused analyses and visual diagnostics
 │   ├── demos/                      # Manual MATLAB demos
 │   ├── verification/               # Stage verification and FK validation helpers
+│   ├── realtime/                   # Stage 3.4 replay spine 与 Stage 3.5 实时观测/规划/TCP
+│   ├── realtime_matlab/            # MATLAB TCP executor、q(t) FIFO 与实时可视化
 │   └── data/workspace_trajectory_fixture.json
 ├── tests/
 │   ├── test_stage0.py
@@ -203,6 +207,8 @@ demo_continuous_ik('data/workspace_trajectories/<workspace_trajectory>.json')
 demo_ik_waypoint_snapshots('data/workspace_trajectories/<workspace_trajectory>.json')
 ```
 
+Stage 3.4 / 3.5 的运行说明以 [`CURRENT_STATE.md`](CURRENT_STATE.md) 为准：其中记录当前校准资产、虚拟回放的已验收结果、实时 TCP/MATLAB 启动顺序和最后一项 C920 人工验收边界。不要把原始 trajectory 或 `raw_samples` 当作可覆盖的处理缓存。
+
 ## Test / Verify / Manual Demo
 
 - `test`：自动化单元与回归测试，不依赖真实摄像头。
@@ -211,7 +217,7 @@ demo_ik_waypoint_snapshots('data/workspace_trajectories/<workspace_trajectory>.j
 
 ## 当前工程边界 / 后续方向
 
-C920、二维工作区、毫米轨迹、semantic stroke、MATLAB Position-Only timed continuous trajectory 和 animation 已接入。semantic stroke boundary 已有仅 task-space 的 pen-up lift → transfer → lower artifact；它尚未接入完整多笔机器人执行链，也没有 collision planning。当前尚未实现：
+C920、二维工作区、毫米轨迹、semantic stroke、MATLAB Position-Only timed continuous trajectory 和 animation 已接入。Stage 3.4 已证明虚拟源能够按时间逐点进入整条 `q(t)` 执行链；Stage 3.5 已将相同的规划/执行后半段接到实时 C920 观测。当前成果是仿真跟随，不是实体机械臂安全认证。当前尚未实现：
 
 - multi-stroke free-space transition、碰撞与 Legacy 5DOF 实体执行安全。
 - strict Writing 29 / 29 优化；当前 Legacy5 真实 2 mm triangle strict Writing 为 25 / 29，orientation-relaxation、backward rescue 与 gap recovery 仅为 diagnostic / experiment，不是正式 Position-Only E2E policy。
