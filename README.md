@@ -75,6 +75,13 @@ MonoTeach/
 │   ├── realtime/                   # Stage 3.4 replay spine 与 Stage 3.5 实时观测/规划/TCP
 │   ├── realtime_matlab/            # MATLAB TCP executor、q(t) FIFO 与实时可视化
 │   └── data/workspace_trajectory_fixture.json
+├── banter/                         # 独立 Stage Banter 手势感知 / GestureEvent 边界
+│   ├── contracts.py
+│   ├── gesture_perception.py
+│   ├── gesture_events.py
+│   ├── verify_task1.py
+│   ├── demo_gesture_events.py
+│   └── README.md
 ├── tests/
 │   ├── test_stage0.py
 │   ├── test_stage1.m
@@ -208,6 +215,8 @@ demo_ik_waypoint_snapshots('data/workspace_trajectories/<workspace_trajectory>.j
 ```
 
 Stage 3.4 / 3.5 的运行说明以 [`CURRENT_STATE.md`](CURRENT_STATE.md) 为准：其中记录当前校准资产、虚拟回放的已验收结果、实时 TCP/MATLAB 启动顺序和最后一项 C920 人工验收边界。不要把原始 trajectory 或 `raw_samples` 当作可覆盖的处理缓存。
+
+Stage Banter Tasks 1–7（独立 0/1/2 手 Gesture Perception → one-shot GestureEvent → control-only 双手 FIVE arm gate → Token/Chord/Sequence Grammar → immutable local Interaction Memory → PersonaState / semantic BehaviorEvent → MotionPlan → timing-only StyledMotionPlan → Legacy5 模拟执行完成回执）运行说明、离线 verify 与验收步骤见 [`banter/README.md`](banter/README.md)。Task 7 仍是单动作、非抢占的数字孪生执行闭环；不改变姿态、Stage 2/3 实时协议或实体机器人边界。
 
 ## Test / Verify / Manual Demo
 

@@ -44,3 +44,21 @@ C920 frame
 在普通 PowerShell + MATLAB 中完成一次 C920 验收：确认两次 SPACE、平滑 HOME_TO_START、正常跟随、一次 pen/reacquire 无关节阶跃，最后收到 `FINISHED` 且 admission 为 `OPEN`，而不是 `DRAIN_TO_HOLD`。
 
 实体机械臂、碰撞、6DOF backend、严格 Writing 姿态和绝对计量精度仍不在当前阶段范围。
+
+## Banter Task 7 — 软件闭环完成，C920 人工验收待执行
+
+- Task 7 增加独立的 `DISARMED/ARMED` interaction gate：双手稳定 FIVE
+  仅用于控制，不进入 Grammar、Memory、Persona 或行为链；启动默认
+  `DISARMED`。
+- Task 4 在 Task 7 runtime 中由 Python 本地原子 execution lock 提前进入
+  `DISPATCHED`；只有 MATLAB `MOTION_COMPLETED` 的完整 provenance 回执才能
+  解锁。busy 时不排队、不补发。
+- MATLAB 在启动时预编译十二条 Task 6 Legacy5 轨迹，并按其既有 `q(t)`
+  sample clock 回放；Task 7 不改变 Task 5/6 姿态、TOPP-RA、安全限制或
+  Stage 3 正式 TCP executor。
+- 已通过：Banter Python 全套 **74 passed**、Task 1–7 verify、Task 5/6
+  MATLAB 回归、Task 7 MATLAB 轨迹库/启动 smoke，以及 Python↔MATLAB 的
+  无摄像头 `THUMBS_UP_ACK` TCP completion rehearsal。
+- 仍待普通 PowerShell 人工验收：确认当前 C920 index 后启动 Task 7 demo，
+  验证双手 FIVE ARM/DISARM、busy 时输入不派发、DISARM 不抢占，以及 Q
+  释放相机后动作回 neutral。

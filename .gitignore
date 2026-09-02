@@ -48,6 +48,7 @@ __pycache__/
 
 # Downloaded MediaPipe task assets
 /stage2/models/hand_landmarker.task
+/banter/models/gesture_recognizer.task
 
 /output/
 /outputs/
